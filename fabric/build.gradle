@@ -1,0 +1,48 @@
+plugins {
+    alias(libs.plugins.fabric.loom)
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.mod_group_id
+base { archivesName = project.mod_id + "-fabric" }
+
+evaluationDependsOn(':common')
+
+dependencies {
+    minecraft libs.fabric.minecraft
+    mappings loom.officialMojangMappings()
+    modImplementation libs.fabric.loader
+    modImplementation libs.fabric.api
+    modImplementation libs.cloth.config.fabric
+    modImplementation libs.modmenu
+    implementation project(path: ":common", configuration: "namedElements")
+}
+
+processResources {
+    def modVersion = project.version
+    inputs.property "version", modVersion
+    filesMatching("fabric.mod.json") {
+        expand "version": modVersion
+    }
+    from(project.project(":common").file("src/main/resources")) {
+        include "rzero.accesswidener"
+        include "rzero.mixins.json"
+        include "assets/**"
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+loom {
+    accessWidenerPath = project(":common").file("src/main/resources/rzero.accesswidener")
+
+    runs {
+        client { client() }
+        server { server() }
+    }
+}
+
+jar {
+    from project(":common").sourceSets.main.output
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

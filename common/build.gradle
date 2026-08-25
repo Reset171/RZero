@@ -1,0 +1,27 @@
+plugins {
+    alias(libs.plugins.fabric.loom)
+}
+
+version = project.mod_version
+group = project.mod_group_id
+base { archivesName = project.mod_id + "-common" }
+
+dependencies {
+    minecraft libs.fabric.minecraft
+    mappings loom.officialMojangMappings()
+    
+    compileOnly libs.mixin
+    
+    modCompileOnly libs.fabric.loader
+    compileOnly libs.fabric.loader
+
+    modCompileOnly libs.cloth.config.fabric
+}
+
+loom {
+    accessWidenerPath = file("src/main/resources/rzero.accesswidener")
+    mixin {
+        useLegacyMixinAp = true
+        defaultRefmapName = "rzero.refmap.json"
+    }
+}

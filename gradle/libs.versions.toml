@@ -1,0 +1,34 @@
+[versions]
+java = "21"
+minecraft = "1.21.1"
+parchmentMappings = "2024.11.17"
+
+neoforge = "21.1.247"
+neoform = "1.21.1-20240808.144430"
+moddevgradle = "2.0.143"
+
+fabric-loader = "0.19.0"
+fabric-api = "0.116.15+1.21.1"
+fabric-loom = "1.17-SNAPSHOT"
+
+mixin = "0.8.7"
+gson = "2.14.0"
+guava = "33.6.0-jre"
+junit = "5.11.4"
+cloth-config = "15.0.140"
+modmenu = "11.0.4"
+
+[libraries]
+fabric-minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
+fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
+fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api" }
+mixin = { module = "org.spongepowered:mixin", version.ref = "mixin" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+cloth-config-fabric = { module = "me.shedaniel.cloth:cloth-config-fabric", version.ref = "cloth-config" }
+cloth-config-neoforge = { module = "me.shedaniel.cloth:cloth-config-neoforge", version.ref = "cloth-config" }
+modmenu = { module = "com.terraformersmc:modmenu", version.ref = "modmenu" }
+[plugins]
+moddevgradle = { id = "net.neoforged.moddev", version.ref = "moddevgradle" }
+fabric-loom = { id = "fabric-loom", version.ref = "fabric-loom" }

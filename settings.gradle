@@ -1,0 +1,10 @@
+pluginManagement {
+    repositories {
+        maven { url = "https://maven.neoforged.net/releases" }
+        maven { url = "https://maven.fabricmc.net/" }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+rootProject.name = 'RZero'
+include 'common', 'fabric', 'neoforge'

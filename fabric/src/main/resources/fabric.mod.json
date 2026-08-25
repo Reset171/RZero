@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "rzero",
+  "version": "${version}",
+  "name": "RZero",
+  "description": "Return by Death. Completely rewind the timeline and the world state to your last checkpoint upon death.",
+  "authors": ["Reset171"],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/rzero/",
+    "sources": "https://github.com/Reset171/RZero",
+    "issues": "https://github.com/Reset171/RZero/issues"
+  },
+  "license": "GPLv3",
+  "icon": "assets/rzero/icon.png",
+  "environment": "*",
+  "accessWidener": "rzero.accesswidener",
+  "entrypoints": {
+    "main": ["ru.reset.rzero.fabric.RZeroFabric"],
+    "client": ["ru.reset.rzero.fabric.RZeroClientFabric"],
+    "modmenu": ["ru.reset.rzero.fabric.RZeroModMenuIntegration"]
+  },
+  "mixins": ["rzero.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.5",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "fabric-api": "*",
+    "cloth-config2": ">=15.0.0"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}

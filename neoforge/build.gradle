@@ -1,0 +1,62 @@
+plugins {
+    id 'java-library'
+    alias(libs.plugins.moddevgradle)
+}
+
+version = project.mod_version
+group = project.mod_group_id
+base { archivesName = project.mod_id + "-neoforge" }
+
+evaluationDependsOn(':common')
+
+neoForge {
+    version = libs.versions.neoforge.get()
+
+    parchment {
+        mappingsVersion = libs.versions.parchmentMappings.get()
+        minecraftVersion = libs.versions.minecraft.get()
+    }
+
+    accessTransformers {
+        from(file("src/main/resources/META-INF/accesstransformer.cfg"))
+    }
+
+    runs {
+        client {
+            client()
+            systemProperty 'mixin.env.disableRefMap', 'true'
+        }
+        server {
+            server()
+            systemProperty 'mixin.env.disableRefMap', 'true'
+        }
+    }
+
+    mods {
+        rzero {
+            sourceSet sourceSets.main
+            sourceSet project.project(":common").sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    implementation project(":common")
+    implementation libs.cloth.config.neoforge
+}
+
+processResources {
+    def modVersion = project.version
+    inputs.property "version", modVersion
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand "version": modVersion
+    }
+}
+
+jar {
+    from(project.project(":common").sourceSets.main.output) {
+        filesMatching("rzero.mixins.json") {
+            filter { String line -> line.contains('"refmap"') ? "" : line }
+        }
+    }
+}

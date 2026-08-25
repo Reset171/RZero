@@ -1,0 +1,23 @@
+accessWidener v2 named
+
+accessible field net/minecraft/world/entity/ai/Brain memories Ljava/util/Map;
+accessible field net/minecraft/world/entity/ai/control/LookControl wantedX D
+accessible field net/minecraft/world/entity/ai/control/LookControl wantedY D
+accessible field net/minecraft/world/entity/ai/control/LookControl wantedZ D
+accessible field net/minecraft/world/entity/ai/control/LookControl yMaxRotSpeed F
+accessible field net/minecraft/world/entity/ai/control/LookControl xMaxRotAngle F
+accessible field net/minecraft/world/entity/ai/control/LookControl lookAtCooldown I
+accessible field net/minecraft/world/entity/ai/control/MoveControl wantedX D
+accessible field net/minecraft/world/entity/ai/control/MoveControl wantedY D
+accessible field net/minecraft/world/entity/ai/control/MoveControl wantedZ D
+accessible field net/minecraft/world/entity/ai/control/MoveControl speedModifier D
+accessible class net/minecraft/world/entity/ai/control/MoveControl$Operation
+accessible field net/minecraft/world/entity/ai/control/MoveControl strafeForwards F
+accessible field net/minecraft/world/entity/ai/control/MoveControl strafeRight F
+accessible field net/minecraft/world/entity/ai/control/MoveControl operation Lnet/minecraft/world/entity/ai/control/MoveControl$Operation;
+
+mutable field net/minecraft/world/level/Level random Lnet/minecraft/util/RandomSource;
+
+accessible class net/minecraft/world/entity/projectile/FishingHook$FishHookState
+accessible method net/minecraft/world/level/NaturalSpawner$SpawnState canSpawnForCategory (Lnet/minecraft/world/entity/MobCategory;Lnet/minecraft/world/level/ChunkPos;)Z
+accessible field net/minecraft/world/level/dimension/end/EndDragonFight dragonEvent Lnet/minecraft/server/level/ServerBossEvent;

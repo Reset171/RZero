@@ -1,0 +1,28 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="GPLv3"
+
+[[mixins]]
+config="rzero.mixins.json"
+
+[[mods]]
+modId="rzero"
+version="${version}"
+displayName="RZero"
+displayURL="https://modrinth.com/mod/rzero"
+authors="Reset171"
+description="Return by Death. Completely rewind the timeline and the world state to your last checkpoint upon death."
+
+[[dependencies.rzero]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.21.1]"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.rzero]]
+    modId="cloth_config"
+    mandatory=true
+    versionRange="[15.0.0,)"
+    ordering="NONE"
+    side="BOTH"
