@@ -12,14 +12,18 @@ public record RZeroSettings(
         RZeroCheckpointPolicy checkpointPolicy,
         RZeroClientRestoreSettings clientRestore,
         RZeroAnchorSettings anchor,
-        RZeroAdaptiveSettings adaptive) {
+        RZeroAdaptiveSettings adaptive,
+        boolean advancedUi,
+        boolean logs) {
 
     public static final Codec<RZeroSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.BOOL.optionalFieldOf("rzerochashEnabled", true).forGetter(RZeroSettings::rzerochashEnabled),
             RZeroCheckpointPolicy.CODEC.optionalFieldOf("checkpointPolicy", RZeroCheckpointPolicy.defaults()).forGetter(RZeroSettings::checkpointPolicy),
             RZeroClientRestoreSettings.CODEC.optionalFieldOf("client_restore", RZeroClientRestoreSettings.defaults()).forGetter(RZeroSettings::clientRestore),
             RZeroAnchorSettings.CODEC.optionalFieldOf("anchor", RZeroAnchorSettings.defaults()).forGetter(RZeroSettings::anchor),
-            RZeroAdaptiveSettings.CODEC.optionalFieldOf("adaptive", RZeroAdaptiveSettings.defaults()).forGetter(RZeroSettings::adaptive)
+            RZeroAdaptiveSettings.CODEC.optionalFieldOf("adaptive", RZeroAdaptiveSettings.defaults()).forGetter(RZeroSettings::adaptive),
+            Codec.BOOL.optionalFieldOf("advancedUi", false).forGetter(RZeroSettings::advancedUi),
+            Codec.BOOL.optionalFieldOf("logs", false).forGetter(RZeroSettings::logs)
     ).apply(instance, RZeroSettings::new));
 
     public RZeroSettings {
@@ -43,31 +47,41 @@ public record RZeroSettings(
                 RZeroCheckpointPolicy.defaults(),
                 RZeroClientRestoreSettings.defaults(),
                 RZeroAnchorSettings.defaults(),
-                RZeroAdaptiveSettings.defaults());
+                RZeroAdaptiveSettings.defaults(),
+                false,
+                false);
     }
 
     public RZeroSettings sanitize() {
-        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, clientRestore, anchor, adaptive);
+        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, clientRestore, anchor, adaptive, advancedUi, logs);
     }
 
     public RZeroSettings withRzerochashEnabled(boolean enabled) {
-        return new RZeroSettings(enabled, checkpointPolicy, clientRestore, anchor, adaptive);
+        return new RZeroSettings(enabled, checkpointPolicy, clientRestore, anchor, adaptive, advancedUi, logs);
     }
 
     public RZeroSettings withCheckpointPolicy(RZeroCheckpointPolicy newPolicy) {
-        return new RZeroSettings(rzerochashEnabled, newPolicy, clientRestore, anchor, adaptive);
+        return new RZeroSettings(rzerochashEnabled, newPolicy, clientRestore, anchor, adaptive, advancedUi, logs);
     }
 
     public RZeroSettings withClientRestore(RZeroClientRestoreSettings newClientRestore) {
-        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, newClientRestore, anchor, adaptive);
+        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, newClientRestore, anchor, adaptive, advancedUi, logs);
     }
 
     public RZeroSettings withAnchor(RZeroAnchorSettings newAnchor) {
-        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, clientRestore, newAnchor, adaptive);
+        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, clientRestore, newAnchor, adaptive, advancedUi, logs);
     }
 
     public RZeroSettings withAdaptive(RZeroAdaptiveSettings newAdaptive) {
-        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, clientRestore, anchor, newAdaptive);
+        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, clientRestore, anchor, newAdaptive, advancedUi, logs);
+    }
+
+    public RZeroSettings withAdvancedUi(boolean newAdvancedUi) {
+        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, clientRestore, anchor, adaptive, newAdvancedUi, logs);
+    }
+
+    public RZeroSettings withLogs(boolean newLogs) {
+        return new RZeroSettings(rzerochashEnabled, checkpointPolicy, clientRestore, anchor, adaptive, advancedUi, newLogs);
     }
 
     public JsonObject toJson() {

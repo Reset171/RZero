@@ -22,8 +22,6 @@ import java.util.UUID;
 
 public final class CheckpointManager {
 
-    public static final ThreadLocal<Boolean> isRestoringChunk = ChunkRestorer.isRestoringChunk;
-
     private CheckpointManager() {
     }
 

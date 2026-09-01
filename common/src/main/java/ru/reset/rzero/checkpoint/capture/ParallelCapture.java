@@ -15,13 +15,13 @@ public final class ParallelCapture {
                                      ChunkScope scope,
                                      CheckpointData data,
                                      ru.reset.rzero.serial.RZBlobEncoder.Session session,
-                                     java.util.Map<Long, java.util.List<net.minecraft.world.entity.Entity>> entitiesByChunk) {
+                                     it.unimi.dsi.fastutil.longs.Long2ObjectMap<java.util.List<net.minecraft.world.entity.Entity>> entitiesByChunk) {
         for (long chunkKey : chunkKeys) {
             if (scope != null && !scope.includes(level.dimension(), chunkKey)) continue;
             ChunkPos cPos = new ChunkPos(chunkKey);
             if (level.hasChunk(cPos.x, cPos.z)) {
                 LevelChunk chunk = level.getChunk(cPos.x, cPos.z);
-                CheckpointManager.captureChunkForSnapshot(level, chunk, data, session, entitiesByChunk == null ? null : entitiesByChunk.getOrDefault(chunkKey, java.util.List.of()));
+                CheckpointManager.captureChunkForSnapshot(level, chunk, data, session, entitiesByChunk == null ? null : entitiesByChunk.get(chunkKey));
             }
         }
     }

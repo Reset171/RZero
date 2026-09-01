@@ -25,9 +25,31 @@ public final class SpawnEngine {
     public static final long SALT_CATCHUP = 0x4341_544348_5550L;
     public static final long SALT_CATCHUP_MONSTER = 0x4D4F_4E43_4154_4348L;
 
-    public record Context(long epoch, long gameTime, long chunkKey, long seed) {}
+    public static final class Context {
+        private long epoch;
+        private long gameTime;
+        private long chunkKey;
+        private long seed;
 
-    private static final ThreadLocal<Context> CONTEXT = new ThreadLocal<>();
+        public void set(long epoch, long gameTime, long chunkKey, long seed) {
+            this.epoch = epoch;
+            this.gameTime = gameTime;
+            this.chunkKey = chunkKey;
+            this.seed = seed;
+        }
+
+        public long epoch() { return epoch; }
+        public long gameTime() { return gameTime; }
+        public long chunkKey() { return chunkKey; }
+        public long seed() { return seed; }
+    }
+
+    private static final ThreadLocal<Context> CONTEXT = ThreadLocal.withInitial(Context::new);
+    private static final ThreadLocal<Boolean> CONTEXT_ACTIVE = ThreadLocal.withInitial(() -> false);
+
+    private static final java.util.concurrent.ConcurrentHashMap<
+            net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>, Long> DIM_HASHES =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private static final Long2ObjectMap<int[]> TILE_COUNTS = new Long2ObjectOpenHashMap<>();
     private static final Long2ObjectMap<int[]> CHUNK_COUNTS = new Long2ObjectOpenHashMap<>();
@@ -46,7 +68,8 @@ public final class SpawnEngine {
     }
 
     public static long derive(ServerLevel level, long chunkKey, long tick, long salt) {
-        long dimension = level.dimension().location().toString().hashCode();
+        long dimension = DIM_HASHES.computeIfAbsent(level.dimension(),
+                k -> (long) k.location().toString().hashCode());
         long raw = level.getSeed()
                 ^ (dimension * DIM_MIX)
                 ^ (chunkKey * CHUNK_MIX)
@@ -55,16 +78,17 @@ public final class SpawnEngine {
         return RandomSupport.mixStafford13(raw);
     }
 
-    public static void open(Context context) {
-        CONTEXT.set(context);
+    public static void open(long epoch, long gameTime, long chunkKey, long seed) {
+        CONTEXT.get().set(epoch, gameTime, chunkKey, seed);
+        CONTEXT_ACTIVE.set(true);
     }
 
     public static void close() {
-        CONTEXT.remove();
+        CONTEXT_ACTIVE.set(false);
     }
 
     public static Context current() {
-        return CONTEXT.get();
+        return CONTEXT_ACTIVE.get() ? CONTEXT.get() : null;
     }
 
     public static int getTileCategoryCap(MobCategory category) {

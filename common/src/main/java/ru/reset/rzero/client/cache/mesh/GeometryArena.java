@@ -50,11 +50,15 @@ public final class GeometryArena {
     }
 
     public boolean allocate(long bytes) {
-        if (this.bufferId != 0) {
-            this.free();
-        }
         if (bytes <= 0L) {
             return false;
+        }
+        if (this.bufferId != 0 && bytes <= this.capacity) {
+            this.used = 0L;
+            return true;
+        }
+        if (this.bufferId != 0) {
+            this.free();
         }
 
         glGetError();
@@ -80,7 +84,7 @@ public final class GeometryArena {
         this.bufferId = id;
         this.capacity = bytes;
         this.used = 0L;
-        RZero.LOGGER.info("[RZero][mesh] geometry arena allocated: {} MB", bytes / (1024 * 1024));
+        RZero.logInfo("[RZero][mesh] geometry arena allocated: {} MB", bytes / (1024 * 1024));
         return true;
     }
 

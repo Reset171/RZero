@@ -51,7 +51,7 @@ public abstract class MixinClientPacketListener {
                             mc, mc.player.getX(), mc.player.getY(), mc.player.getZ(),
                             mc.player.getYRot(), mc.player.getXRot(), -1L, -1L);
                     RZeroClientCache.get().clearInterDimensionalRollback();
-                    RZero.LOGGER.info("[RZero][cache] Seamless inter-dimensional cache injected into new ClientLevel!");
+                    RZero.logInfo("[RZero][cache] Injected cache into ClientLevel (dim={})", mc.level.dimension().location());
                 } else {
                     RZeroClientCache.get().clearInterDimensionalRollback();
                 }

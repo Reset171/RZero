@@ -21,7 +21,9 @@ public abstract class MixinLevelTicks<T> implements IRZeroTickAccess<T> {
     public List<ScheduledTick<T>> rzero$getTicksInChunk(long chunkPos) {
         LevelChunkTicks<T> chunkTicks = this.allContainers.get(chunkPos);
         if (chunkTicks != null) {
-            return chunkTicks.getAll().collect(Collectors.toList());
+            List<ScheduledTick<T>> list = new ArrayList<>();
+            chunkTicks.getAll().forEach(list::add);
+            return list;
         }
         return new ArrayList<>();
     }

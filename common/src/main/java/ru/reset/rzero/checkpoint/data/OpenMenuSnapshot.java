@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+
 public class OpenMenuSnapshot {
     public String menuTypeId;
     public int containerId;
@@ -44,6 +45,8 @@ public class OpenMenuSnapshot {
     public CompoundTag carriedTag;
     public ListTag craftMatrix = new ListTag();
     public int creativeTab = -1;
+    public transient int menuRestoreAttempts;
+    public transient int enqueuedAtTick;
 
     public transient ItemStack[] cachedSlotStacks;
     public transient ItemStack[] cachedCraftStacks;
@@ -188,6 +191,11 @@ public class OpenMenuSnapshot {
     }
 
     public void restore(ServerPlayer player, ServerLevel level, net.minecraft.core.HolderLookup.Provider lookup) {
+        restoreImmediate(player, lookup);
+        restoreMenuReopen(player, level, lookup);
+    }
+
+    public void restoreImmediate(ServerPlayer player, net.minecraft.core.HolderLookup.Provider lookup) {
         try {
             CraftingContainer cc = player.inventoryMenu.getCraftSlots();
             int n = Math.min(cc.getContainerSize(),
@@ -206,64 +214,85 @@ public class OpenMenuSnapshot {
             }
         } catch (Throwable ignored) {}
 
-        ItemStack carried;
-        if (cachedCarriedStack != null) {
-            carried = cachedCarriedStack.isEmpty() ? ItemStack.EMPTY : cachedCarriedStack.copy();
-        } else if (carriedTag != null && !carriedTag.isEmpty()) {
-            carried = ItemStack.parse(lookup, carriedTag).orElse(ItemStack.EMPTY);
-        } else {
-            carried = ItemStack.EMPTY;
-        }
-        player.connection.send(new net.minecraft.network.protocol.game.ClientboundContainerClosePacket(player.containerMenu.containerId));
+        ItemStack carried = resolveCarried(lookup);
         player.containerMenu.setCarried(carried);
         player.connection.send(new net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket(-1, 0, 0, carried));
+    }
 
+    private ItemStack resolveCarried(net.minecraft.core.HolderLookup.Provider lookup) {
+        if (cachedCarriedStack != null) {
+            return cachedCarriedStack.isEmpty() ? ItemStack.EMPTY : cachedCarriedStack.copy();
+        }
+        if (carriedTag != null && !carriedTag.isEmpty()) {
+            return ItemStack.parse(lookup, carriedTag).orElse(ItemStack.EMPTY);
+        }
+        return ItemStack.EMPTY;
+    }
+
+    public boolean isAnchorReady(ServerLevel level) {
+        if (anchorEntityUuid != null) {
+            return level.getEntity(anchorEntityUuid) != null;
+        }
+        if (anchorBlockPos != null) {
+            BlockPos pos = BlockPos.of(anchorBlockPos);
+            return level.getBlockState(pos).getMenuProvider(level, pos) != null;
+        }
+        return true;
+    }
+
+    public void restoreMenuReopen(ServerPlayer player, ServerLevel level, net.minecraft.core.HolderLookup.Provider lookup) {
         if (menuTypeId == null) {
             return;
         }
 
-        MenuProvider provider = null;
+        boolean reopened = false;
 
         if (anchorBlockPos != null) {
             BlockPos pos = BlockPos.of(anchorBlockPos);
             try {
-                provider = level.getBlockState(pos).getMenuProvider(level, pos);
-            } catch (Throwable ignored) {}
-        }
-
-        if (provider == null && anchorEntityUuid != null) {
-            Entity ent = level.getEntity(anchorEntityUuid);
-            if (ent instanceof AbstractVillager v) {
-                v.setTradingPlayer(player);
-                int tradeLevel = (v instanceof Villager vill)
-                        ? vill.getVillagerData().getLevel()
-                        : 1;
-                v.openTradingScreen(player, v.getDisplayName(), tradeLevel);
-                applySlotAndDataResync(player);
-                return;
-            } else if (ent instanceof AbstractHorse h) {
-                h.openCustomInventoryScreen(player);
-                applySlotAndDataResync(player);
-                return;
-            }
-        }
-
-        if (provider == null) {
-            try {
-                ResourceLocation rid = ResourceLocation.parse(menuTypeId);
-                MenuType<?> type = BuiltInRegistries.MENU.get(rid);
-                if (type != null) {
-                    final MenuType<?> finalType = type;
-                    provider = new SimpleMenuProvider(
-                            (id, inv, p) -> finalType.create(id, inv),
-                            Component.empty());
+                MenuProvider provider = level.getBlockState(pos).getMenuProvider(level, pos);
+                if (provider != null) {
+                    player.openMenu(provider);
+                    reopened = true;
                 }
             } catch (Throwable ignored) {}
         }
 
-        if (provider != null) {
-            player.openMenu(provider);
+        if (!reopened && anchorEntityUuid != null) {
+            Entity ent = level.getEntity(anchorEntityUuid);
+            if (ent instanceof AbstractVillager v) {
+                int tradeLevel = (v instanceof Villager vill)
+                        ? vill.getVillagerData().getLevel()
+                        : 1;
+                v.setTradingPlayer(player);
+                v.openTradingScreen(player, v.getDisplayName(), tradeLevel);
+                reopened = true;
+            } else if (ent instanceof AbstractHorse h) {
+                h.openCustomInventoryScreen(player);
+                reopened = true;
+            }
+        }
+
+        if (!reopened) {
+            try {
+                ResourceLocation rid = ResourceLocation.parse(menuTypeId);
+                MenuType<?> type = BuiltInRegistries.MENU.get(rid);
+                if (type != null) {
+                    player.openMenu(new SimpleMenuProvider(
+                            (id, inv, p) -> type.create(id, inv),
+                            Component.empty()));
+                    reopened = true;
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        if (reopened) {
             applySlotAndDataResync(player);
+            ItemStack carried = resolveCarried(lookup);
+            if (!carried.isEmpty()) {
+                player.containerMenu.setCarried(carried);
+                player.connection.send(new net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket(-1, 0, 0, carried));
+            }
         }
     }
 

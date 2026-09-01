@@ -37,10 +37,12 @@ public class RZeroConfigScreen {
 
         ConfigEntryBuilder entryBuilder = builder.entryBuilder();
         RZeroSettings current = RZeroRuntime.settings();
+        currentUiMode = current.advancedUi() ? UiMode.EXPERT : UiMode.BASIC;
 
         class StateHolder {
             UiMode uiMode = currentUiMode;
             boolean rzerochashEnabled = current.rzerochashEnabled();
+            boolean logsEnabled = current.logs();
 
             int adaptive_minSaveGapSeconds = current.adaptive().minSaveGapSeconds();
             int adaptive_relaxTimeSeconds = current.adaptive().relaxTimeSeconds();
@@ -163,6 +165,8 @@ public class RZeroConfigScreen {
                     UiMode next = getValue();
                     if (next != currentUiMode) {
                         currentUiMode = next;
+                        RZeroRuntime.setSettings(RZeroRuntime.settings().withAdvancedUi(next == UiMode.EXPERT));
+                        RZeroConfig.save();
                         Minecraft.getInstance().setScreen(RZeroConfigScreen.create(parent));
                     }
                 }
@@ -170,6 +174,8 @@ public class RZeroConfigScreen {
             }
         };
         general.addEntry(uiModeEntry);
+
+        addToggle(general, entryBuilder, "config.rzero.logsEnabled", state.logsEnabled, false, val -> state.logsEnabled = val, true);
 
         ConfigCategory clientRestore = builder.getOrCreateCategory(Component.translatable("config.rzero.category.clientRestore"));
 
@@ -439,7 +445,9 @@ public class RZeroConfigScreen {
                     .withCheckpointPolicy(newPolicy)
                     .withClientRestore(newClientRestore)
                     .withAdaptive(newAdaptive)
-                    .withAnchor(RZeroRuntime.settings().anchor());
+                    .withAnchor(RZeroRuntime.settings().anchor())
+                    .withAdvancedUi(state.uiMode == UiMode.EXPERT)
+                    .withLogs(state.logsEnabled);
 
             RZeroRuntime.setSettings(newSettings);
             RZeroConfig.save();

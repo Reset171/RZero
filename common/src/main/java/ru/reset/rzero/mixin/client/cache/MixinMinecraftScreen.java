@@ -20,7 +20,7 @@ public abstract class MixinMinecraftScreen {
         if (screen instanceof ReceivingLevelScreen
                 && RZeroRuntime.clientRestore().suppressTerrainLoadingScreen()
                 && RZeroClientCache.get().isInterDimensionalRollback()) {
-            RZero.LOGGER.info("[RZero][cache] Suppressed ReceivingLevelScreen for seamless inter-dimensional rollback");
+            RZero.logInfo("[RZero][cache] Suppressed ReceivingLevelScreen during rollback");
             return null;
         }
         return screen;

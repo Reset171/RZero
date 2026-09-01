@@ -106,5 +106,21 @@ public final class RZBlobEncoder {
         }
 
         public int submitted() { return inflight.size(); }
+
+        public record SessionStats(long backgroundNanos, int blobsCount) {}
+
+        public void whenComplete(long startNanos, Consumer<SessionStats> callback) {
+            final List<Future<?>> tasks = new ArrayList<>(this.inflight);
+            final int count = tasks.size();
+            pool().submit(() -> {
+                for (Future<?> f : tasks) {
+                    try {
+                        f.get();
+                    } catch (Throwable ignored) {}
+                }
+                long bgNanos = System.nanoTime() - startNanos;
+                callback.accept(new SessionStats(bgNanos, count));
+            });
+        }
     }
 }

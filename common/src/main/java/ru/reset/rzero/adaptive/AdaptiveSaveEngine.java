@@ -57,7 +57,7 @@ public final class AdaptiveSaveEngine {
         lastSaveTick = server.overworld().getGameTime();
         RZeroAdaptiveData.markDirty(server);
         calculateNextInterval(server.overworld());
-        RZero.LOGGER.info("[RZero] Auto-save timer reset after Return by Death.");
+        RZero.logInfo("[RZero] Auto-save timer reset after rollback.");
     }
 
     public static void calculateNextInterval(ServerLevel level) {

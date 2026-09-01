@@ -5,6 +5,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import ru.reset.rzero.ModGameRules;
@@ -33,12 +34,26 @@ public final class ServerTickEvents {
         DevHooks.fireServerTickPost(server);
 
         long currentTick = server.overworld().getGameTime();
+        int tickCount = server.getTickCount();
+        ru.reset.rzero.util.RZBenchmark.tick(tickCount);
+        boolean queuesEmpty = RestoreQueues.chunksReadyForRestore.isEmpty()
+                && RestoreQueues.chunksPendingEntityRestore.isEmpty()
+                && RestoreQueues.pendingPathRestores.isEmpty()
+                && RestoreQueues.pendingChunkResends.isEmpty()
+                && RestoreQueues.pendingMenuRestores.isEmpty()
+                && SnapshotRegistry.allPendingBlockRollbacksEmpty();
+        if (queuesEmpty) {
+            ru.reset.rzero.util.RZBenchmark.endAndLog();
+        }
 
         MobRamCache.evictExpired(currentTick);
         promoteLoadedChunks(server);
         discardDoomedEntities();
         drainEntityRestoreQueue();
+        processMenuRestores(server, tickCount);
         drainBlockRestoreQueue(currentTick);
+        drainPathRestores();
+        drainChunkResends(server);
         remountPendingRides(server);
         applyPendingDeathRollback(server);
         expireWindows(currentTick);
@@ -81,7 +96,7 @@ public final class ServerTickEvents {
         }
     }
 
-    private static void drainEntityRestoreQueue() {
+    public static void drainEntityRestoreQueue() {
         LevelChunk chunk;
         while ((chunk = RestoreQueues.chunksPendingEntityRestore.poll()) != null) {
             ServerLevel level = (ServerLevel) chunk.getLevel();
@@ -105,6 +120,74 @@ public final class ServerTickEvents {
             RestoreQueues.chunksPendingEntityRestore.add(chunk);
             Long2LongMap rollbacks = RestoreQueues.rollbacksFor(level.dimension());
             rollbacks.put(chunkKey, currentTick + ENTITY_ROLLBACK_WINDOW);
+        }
+    }
+
+    private static void drainPathRestores() {
+        RestoreQueues.PathRestore pending;
+        int budget = 32;
+        while (budget-- > 0 && (pending = RestoreQueues.pendingPathRestores.poll()) != null) {
+            Mob mob = pending.mob();
+            if (mob.isRemoved()) {
+                continue;
+            }
+            mob.getNavigation().moveTo(pending.x(), pending.y(), pending.z(), pending.speed());
+        }
+    }
+
+    private static final int MENU_RESTORE_TIMEOUT_TICKS = 40;
+
+    private static void drainChunkResends(MinecraftServer server) {
+        int tickCount = server.getTickCount();
+        RestoreQueues.ChunkResend resend;
+        while ((resend = RestoreQueues.pollChunkResend(tickCount)) != null) {
+            ServerLevel level = resend.level();
+            LevelChunk chunk = level.getChunkSource().getChunkNow(resend.chunkX(), resend.chunkZ());
+            if (chunk == null) {
+                continue;
+            }
+            net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket packet =
+                    new net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket(
+                            chunk, level.getLightEngine(), null, null);
+            ChunkPos cPos = new ChunkPos(resend.chunkX(), resend.chunkZ());
+            for (ServerPlayer player : level.getChunkSource().chunkMap.getPlayers(cPos, false)) {
+                player.connection.send(packet);
+            }
+        }
+    }
+
+    private static void processMenuRestores(MinecraftServer server, int tickCount) {
+        if (RestoreQueues.pendingMenuRestores.isEmpty()) {
+            return;
+        }
+        var it = RestoreQueues.pendingMenuRestores.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            if (player == null || player.isRemoved()) {
+                it.remove();
+                continue;
+            }
+            var snapshot = entry.getValue();
+            if (snapshot == null) {
+                it.remove();
+                continue;
+            }
+            ServerLevel level = player.serverLevel();
+            if (snapshot.isAnchorReady(level)) {
+                long t0 = System.nanoTime();
+                try {
+                    snapshot.restoreMenuReopen(player, level, player.registryAccess());
+                } catch (Throwable t) {
+                    ru.reset.rzero.RZero.LOGGER.warn("[RZero] Menu reopen failed: {}", t.getMessage());
+                }
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.MENU_REOPEN, t0);
+                it.remove();
+            } else if (snapshot.menuRestoreAttempts++ > MENU_RESTORE_TIMEOUT_TICKS) {
+                ru.reset.rzero.RZero.LOGGER.warn("[RZero] Menu reopen abandoned: anchor never appeared for {}",
+                        player.getName().getString());
+                it.remove();
+            }
         }
     }
 

@@ -17,35 +17,35 @@ public final class MeshCacheSupport {
             "me.jellysquid.mods.sodium.client.render.SodiumWorldRenderer"
     };
 
-    private static Boolean supported;
-    private static String blocker;
+    private static final boolean SUPPORTED;
+    private static final String BLOCKER;
+
+    static {
+        String found = null;
+        for (String candidate : INCOMPATIBLE_RENDERERS) {
+            if (classExists(candidate)) {
+                found = candidate;
+                break;
+            }
+        }
+        BLOCKER = found;
+        SUPPORTED = found == null;
+        if (found == null) {
+            RZero.logInfo("[RZero][mesh] vanilla terrain renderer detected — mesh cache available");
+        } else {
+            RZero.logInfo("[RZero][mesh] alternative terrain renderer detected ({}) — mesh cache disabled, "
+                    + "block-data cache unaffected", found);
+        }
+    }
 
     private MeshCacheSupport() {}
 
     public static boolean isSupported() {
-        if (supported == null) {
-            String found = null;
-            for (String candidate : INCOMPATIBLE_RENDERERS) {
-                if (classExists(candidate)) {
-                    found = candidate;
-                    break;
-                }
-            }
-            blocker = found;
-            supported = found == null;
-            if (found == null) {
-                RZero.LOGGER.info("[RZero][mesh] vanilla terrain renderer detected — mesh cache available");
-            } else {
-                RZero.LOGGER.info("[RZero][mesh] alternative terrain renderer detected ({}) — mesh cache disabled, "
-                        + "block-data cache unaffected", found);
-            }
-        }
-        return supported;
+        return SUPPORTED;
     }
 
     public static String blocker() {
-        isSupported();
-        return blocker;
+        return BLOCKER;
     }
 
     private static boolean classExists(String name) {

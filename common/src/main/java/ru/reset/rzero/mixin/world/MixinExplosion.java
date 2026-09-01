@@ -8,10 +8,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.levelgen.LegacyRandomSource;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -26,13 +24,13 @@ public abstract class MixinExplosion {
     @Shadow @Final private double x;
     @Shadow @Final private double y;
     @Shadow @Final private double z;
-    @Mutable @Shadow @Final private RandomSource random;
+    @Shadow @Final private RandomSource random;
 
     @Inject(method = "explode", at = @At("HEAD"))
     private void onExplode(CallbackInfo ci) {
         long worldSeed = (this.level instanceof ServerLevel sl) ? sl.getSeed() : 0L;
         long seed = ((long) Math.floor(this.x) * 3129871) ^ ((long) Math.floor(this.y) * 116129781L) ^ ((long) Math.floor(this.z)) ^ worldSeed;
-        this.random = new LegacyRandomSource(seed);
+        this.random.setSeed(seed);
     }
 
     @Redirect(method = "explode", at = @At(value = "FIELD", target = "Lnet/minecraft/world/level/Level;random:Lnet/minecraft/util/RandomSource;"))

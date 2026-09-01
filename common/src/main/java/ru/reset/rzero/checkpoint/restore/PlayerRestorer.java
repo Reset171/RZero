@@ -30,22 +30,23 @@ public final class PlayerRestorer {
         RestoreQueues.pendingOfflineRollbacks.clear();
         RZeroCheckpointPolicy policy = RZeroRuntime.effectivePolicy(data);
 
-        restoreOfflineFiles(server, data);
-
         List<ServerPlayer> currentPlayers = new ArrayList<>(server.getPlayerList().getPlayers());
         for (Map.Entry<UUID, PlayerData> entry : data.playersData.entrySet()) {
             ServerPlayer p = server.getPlayerList().getPlayer(entry.getKey());
             if (p == null) {
                 RestoreQueues.pendingOfflineRollbacks.put(entry.getKey(), entry.getValue());
             } else {
+                ru.reset.rzero.util.RZBenchmark.addPlayers(1);
+                long t1 = System.nanoTime();
                 restoreOne(server, p, entry.getValue(), targetLevel, policy);
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.PLAYERS_ONLINE, t1);
             }
         }
         resetPlayersOutsideTimeline(currentPlayers, data, server, targetLevel.registryAccess(), policy);
     }
 
 
-    private static void restoreOfflineFiles(MinecraftServer server, CheckpointData data) {
+    public static void restoreOfflineFiles(MinecraftServer server, CheckpointData data) {
         File playerDir = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).toFile();
         if (!playerDir.exists() || !playerDir.isDirectory()) {
             return;

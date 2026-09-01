@@ -96,7 +96,7 @@ public abstract class MixinEntity implements ru.reset.rzero.access.IRZeroEntityR
     @Inject(method = "<init>", at = @At("RETURN"))
     private void rzero$stampNaturalSpawn(EntityType<?> type, Level level, CallbackInfo ci) {
         if (!((Object) this instanceof Mob)) return;
-        if (!RZeroRuntime.checkpointPolicy().determinism().naturalSpawn().stampSpawnOrigin()) return;
+        if (!RZeroRuntime.naturalSpawnPolicy().stampSpawnOrigin()) return;
         SpawnEngine.Context ctx = SpawnEngine.current();
         if (ctx == null) return;
         this.rzero$stampSpawn(ctx.gameTime(), ctx.epoch(), ctx.seed(), ctx.chunkKey());

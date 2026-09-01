@@ -20,6 +20,7 @@ import ru.reset.rzero.checkpoint.codec.ScheduledTickCodec;
 import ru.reset.rzero.checkpoint.data.CheckpointData;
 import ru.reset.rzero.config.RZeroCheckpointPolicy;
 import ru.reset.rzero.mixin.level.MixinLevelTicksSchedule;
+import ru.reset.rzero.runtime.RestoreQueues;
 import ru.reset.rzero.runtime.RZeroRuntime;
 
 import java.util.ArrayList;
@@ -30,8 +31,9 @@ import java.util.Set;
 public final class ChunkRestorer {
 
     private static final int UPDATE_NEIGHBORS_AND_CLIENTS = 3;
+    private static final int RESEND_CHUNK_THRESHOLD = 64;
 
-    public static final ThreadLocal<Boolean> isRestoringChunk = ThreadLocal.withInitial(() -> false);
+    public static volatile boolean isRestoringChunk = false;
 
     private ChunkRestorer() {
     }
@@ -52,32 +54,74 @@ public final class ChunkRestorer {
         boolean restorePoisEnabled = policy.rollback().pois();
         boolean restoreBlockEventsEnabled = policy.rollback().blockEvents();
 
+        long t0 = System.nanoTime();
         if (restoreBlockTicksEnabled || restoreFluidTicksEnabled) {
             clearScheduledTicks(level, cPos);
         }
         Set<BlockPos> forceUpdatePos = restoreBlockEntitiesEnabled ? clearBlockEntities(chunk) : new HashSet<>();
+        ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CHUNK_BE_CLEAR, t0);
 
+        it.unimi.dsi.fastutil.longs.LongList changedPositions =
+                isDuringLoad || !restoreBlocksEnabled ? null : new it.unimi.dsi.fastutil.longs.LongArrayList();
+        int changedBlocks = 0;
         boolean needsUpdate = false;
         if (restoreBlocksEnabled) {
-            needsUpdate = applySections(level, chunk, data, chunkKey, isDuringLoad);
+            long t1 = System.nanoTime();
+            changedBlocks = applySections(level, chunk, data, chunkKey, isDuringLoad, changedPositions);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CHUNK_BLOCKS, t1);
+            ru.reset.rzero.util.RZBenchmark.addBlocksChanged(changedBlocks);
+            needsUpdate = changedBlocks > 0;
         }
         if (restoreBlockEntitiesEnabled) {
+            long t2 = System.nanoTime();
             needsUpdate |= restoreBlockEntities(level, chunk, data, chunkKey, forceUpdatePos);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CHUNK_BE_LOAD, t2);
         }
+        ru.reset.rzero.util.RZBenchmark.addChunks(1);
 
         if (needsUpdate) {
             chunk.setUnsaved(true);
         }
-        if (!isDuringLoad && !forceUpdatePos.isEmpty()) {
-            pushUpdatesToClients(level, forceUpdatePos);
+        if (!isDuringLoad) {
+            if (changedPositions != null && !changedPositions.isEmpty()) {
+                if (changedBlocks <= RESEND_CHUNK_THRESHOLD) {
+                    long tPush = System.nanoTime();
+                    List<net.minecraft.server.level.ServerPlayer> trackingPlayers =
+                            level.getChunkSource().chunkMap.getPlayers(cPos, false);
+                    if (!trackingPlayers.isEmpty()) {
+                        for (int i = 0; i < changedPositions.size(); i++) {
+                            BlockPos p = BlockPos.of(changedPositions.getLong(i));
+                            net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket packet =
+                                    new net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket(
+                                            p, level.getBlockState(p));
+                            for (net.minecraft.server.level.ServerPlayer sp : trackingPlayers) {
+                                sp.connection.send(packet);
+                            }
+                        }
+                    }
+                    ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CHUNK_PUSH, tPush);
+                } else if (level.getServer() != null) {
+                    RestoreQueues.enqueueChunkResend(level, cPos.x, cPos.z,
+                            level.getServer().getTickCount() + 1);
+                }
+            }
+            if (!forceUpdatePos.isEmpty()) {
+                long t3 = System.nanoTime();
+                pushUpdatesToClients(level, forceUpdatePos);
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CHUNK_PUSH, t3);
+            }
         }
 
         if (restoreBlockTicksEnabled || restoreFluidTicksEnabled) {
+            long t4 = System.nanoTime();
             restoreScheduledTicks(level, data, chunkKey, restoreBlockTicksEnabled, restoreFluidTicksEnabled);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CHUNK_TICKS, t4);
         }
 
         if (!isDuringLoad && restorePoisEnabled && data.chunkPois.containsKey(chunkKey)) {
+            long t5 = System.nanoTime();
             ru.reset.rzero.checkpoint.capture.PoiCapture.restore(level, cPos, data.chunkPois.get(chunkKey));
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CHUNK_POIS, t5);
         }
         if (restoreBlockEventsEnabled) {
             replayBlockEvents(level, data, cPos);
@@ -105,19 +149,20 @@ public final class ChunkRestorer {
         return forceUpdatePos;
     }
 
-    private static boolean applySections(ServerLevel level,
-                                         LevelChunk chunk,
-                                         CheckpointData data,
-                                         long chunkKey,
-                                         boolean isDuringLoad) {
+    private static int applySections(ServerLevel level,
+                                     LevelChunk chunk,
+                                     CheckpointData data,
+                                     long chunkKey,
+                                     boolean isDuringLoad,
+                                     it.unimi.dsi.fastutil.longs.LongList changedPositions) {
         SectionSnapshot[] sections = data.sectionSnapshots.get(chunkKey);
         if (sections == null) {
-            return false;
+            return 0;
         }
         ChunkPos cPos = chunk.getPos();
-        boolean needsUpdate = false;
+        int totalChanged = 0;
 
-        isRestoringChunk.set(true);
+        isRestoringChunk = true;
         try {
             for (int idx = 0; idx < sections.length; idx++) {
                 SectionSnapshot snap = sections[idx];
@@ -126,16 +171,13 @@ public final class ChunkRestorer {
                 }
                 LevelChunkSection live = chunk.getSection(idx);
                 int yBase = SectionPos.sectionToBlockCoord(chunk.getSectionYFromSectionIndex(idx));
-                int changed = snap.applyDiffTo(live, chunk, level,
-                        cPos.getMinBlockX(), yBase, cPos.getMinBlockZ(), isDuringLoad);
-                if (changed > 0) {
-                    needsUpdate = true;
-                }
+                totalChanged += snap.applyDiffTo(live, chunk, level,
+                        cPos.getMinBlockX(), yBase, cPos.getMinBlockZ(), isDuringLoad, changedPositions);
             }
         } finally {
-            isRestoringChunk.set(false);
+            isRestoringChunk = false;
         }
-        return needsUpdate;
+        return totalChanged;
     }
 
     private static boolean restoreBlockEntities(ServerLevel level,
@@ -149,9 +191,13 @@ public final class ChunkRestorer {
         List<CheckpointData.BlockEntityEntry> beEntries = data.chunkBlockEntities.get(chunkKey);
         for (CheckpointData.BlockEntityEntry entry : beEntries) {
             BlockPos pos = entry.pos();
+            BlockState state = chunk.getBlockState(pos);
+            if (!state.hasBlockEntity()) {
+                continue;
+            }
             BlockEntity be = BlockEntity.loadStatic(
-                    pos, chunk.getBlockState(pos), entry.nbt(), level.registryAccess());
-            if (be != null) {
+                    pos, state, entry.nbt(), level.registryAccess());
+            if (be != null && be.getType().isValid(state)) {
                 chunk.addAndRegisterBlockEntity(be);
                 forceUpdatePos.add(pos);
             }

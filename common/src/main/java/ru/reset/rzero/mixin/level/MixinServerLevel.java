@@ -43,6 +43,14 @@ public abstract class MixinServerLevel implements IRZeroServerLevel {
     @Unique
     private static final ThreadLocal<Boolean> rzero$customSpawnerMaskActive = ThreadLocal.withInitial(() -> false);
 
+    @Unique
+    private static final ThreadLocal<net.minecraft.world.level.levelgen.SingleThreadedRandomSource> rzero$REUSABLE_RANDOM =
+            ThreadLocal.withInitial(() -> new net.minecraft.world.level.levelgen.SingleThreadedRandomSource(0L));
+
+    @Unique
+    private static final java.util.concurrent.ConcurrentHashMap<net.minecraft.world.entity.EntityType<?>, Long> rzero$TYPE_SALTS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     @Override
     public ObjectLinkedOpenHashSet<BlockEventData> rzero$getBlockEvents() {
         return this.blockEvents;
@@ -116,7 +124,15 @@ public abstract class MixinServerLevel implements IRZeroServerLevel {
 
     @Unique
     private void rzero$pushScope(long seed) {
-        this.rzero$pushDeterministicRandom(new net.minecraft.world.level.levelgen.LegacyRandomSource(seed));
+        net.minecraft.world.level.levelgen.SingleThreadedRandomSource rand = rzero$REUSABLE_RANDOM.get();
+        rand.setSeed(seed);
+        this.rzero$pushDeterministicRandom(rand);
+    }
+
+    @Unique
+    private static long rzero$typeSalt(net.minecraft.world.entity.EntityType<?> type) {
+        return rzero$TYPE_SALTS.computeIfAbsent(type,
+                t -> (long) net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(t).hashCode());
     }
 
     @Unique
@@ -129,12 +145,15 @@ public abstract class MixinServerLevel implements IRZeroServerLevel {
     private static long rzero$entitySeed(ServerLevel level, Entity entity) {
         long uuidSalt = entity.getUUID().getMostSignificantBits() ^ entity.getUUID().getLeastSignificantBits();
         long idSalt = ((long) entity.getId()) << 32;
-        long typeSalt = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).hashCode();
+        long typeSalt = rzero$typeSalt(entity.getType());
         return rzero$mixSeed(level, uuidSalt ^ idSalt ^ typeSalt ^ 0x13579BDF2468ACE0L);
     }
 
     @Inject(method = "tickChunk", at = @At("HEAD"))
     private void rzero$pushDetChunk(net.minecraft.world.level.chunk.LevelChunk chunk, int randomTickSpeed, CallbackInfo ci) {
+        if (!RZeroRuntime.naturalSpawnPolicy().enabled()) {
+            return;
+        }
         ServerLevel level = (ServerLevel) (Object) this;
         if (rzero$tickChunkMaskActive.get()) {
             rzero$recoverLeakedMask(level, "tickChunk");
@@ -153,6 +172,9 @@ public abstract class MixinServerLevel implements IRZeroServerLevel {
 
     @Inject(method = "tickBlock", at = @At("HEAD"))
     private void rzero$pushDetScheduledBlockTick(net.minecraft.core.BlockPos pos, Block block, CallbackInfo ci) {
+        if (!RZeroRuntime.naturalSpawnPolicy().enabled()) {
+            return;
+        }
         ServerLevel level = (ServerLevel) (Object) this;
         if (rzero$tickBlockMaskActive.get()) {
             rzero$recoverLeakedMask(level, "tickBlock");
@@ -172,6 +194,9 @@ public abstract class MixinServerLevel implements IRZeroServerLevel {
 
     @Inject(method = "tickNonPassenger", at = @At("HEAD"))
     private void rzero$pushDetEntityTick(Entity entity, CallbackInfo ci) {
+        if (!RZeroRuntime.mobAiPolicy().brainRng()) {
+            return;
+        }
         ServerLevel level = (ServerLevel) (Object) this;
         if (rzero$entityTickMaskActive.get()) {
             rzero$recoverLeakedMask(level, "entityTick");
@@ -189,6 +214,9 @@ public abstract class MixinServerLevel implements IRZeroServerLevel {
 
     @Inject(method = "tickCustomSpawners", at = @At("HEAD"))
     private void rzero$pushDetCustomSpawners(boolean spawnEnemies, boolean spawnFriendlies, CallbackInfo ci) {
+        if (!RZeroRuntime.checkpointPolicy().determinism().spawns().wanderingTrader()) {
+            return;
+        }
         ServerLevel level = (ServerLevel) (Object) this;
         if (rzero$customSpawnerMaskActive.get()) {
             rzero$recoverLeakedMask(level, "customSpawner");

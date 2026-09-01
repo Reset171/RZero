@@ -36,6 +36,15 @@ public final class SnapshotRegistry {
         return DetOrder.anyValueMatches(activeSnapshots, d -> d.anchorId != null);
     }
 
+    public static boolean allPendingBlockRollbacksEmpty() {
+        for (CheckpointData data : activeSnapshots.values()) {
+            if (!data.pendingBlockRollbacks.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static java.util.List<ServerPlayer> findAnchorPlayers(MinecraftServer server) {
         java.util.List<ServerPlayer> players = new java.util.ArrayList<>();
         for (var entry : DetOrder.sortedEntries(activeSnapshots, k -> k.location().toString())) {

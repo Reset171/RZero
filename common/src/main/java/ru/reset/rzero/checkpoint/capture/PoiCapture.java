@@ -52,7 +52,9 @@ public final class PoiCapture {
                     .map(PoiRecord::getPos)
                     .toList();
             for (BlockPos p : toRemove) {
-                pm.remove(p);
+                if (pm.getType(p).isPresent()) {
+                    pm.remove(p);
+                }
             }
 
             Registry<PoiType> poiReg = level.registryAccess().registryOrThrow(Registries.POINT_OF_INTEREST_TYPE);
@@ -62,6 +64,9 @@ public final class PoiCapture {
                 ResourceLocation typeId = ResourceLocation.parse(t.getString("type"));
                 poiReg.getHolder(ResourceKey.create(Registries.POINT_OF_INTEREST_TYPE, typeId))
                         .ifPresent(holder -> {
+                            if (pm.getType(p).isPresent()) {
+                                pm.remove(p);
+                            }
                             pm.add(p, holder);
                             if (!t.contains("freeTickets")) {
                                 return;

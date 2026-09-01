@@ -53,8 +53,9 @@ public final class RollbackCoordinator {
     }
 
     private static boolean restore(MinecraftServer server, ServerPlayer player) {
-        RZero.LOGGER.info("[RZero] Initiating Universal Persistent RE:ZERO Timeline Rollback{}...",
+        RZero.logInfo("[RZero] Initiating timeline rollback{}...",
                 player == null ? " (headless)" : "");
+        ru.reset.rzero.util.RZBenchmark.begin("ROLLBACK RESTORE", server.getTickCount());
 
         CheckpointData targetPlayerData = null;
         ServerLevel targetLevel = null;
@@ -68,6 +69,7 @@ public final class RollbackCoordinator {
         }
         if (targetPlayerData == null || targetLevel == null) {
             RZero.LOGGER.warn("[RZero] Rollback aborted: No timeline origin found in any dimension.");
+            ru.reset.rzero.util.RZBenchmark.endAndLog();
             return false;
         }
 
@@ -89,12 +91,18 @@ public final class RollbackCoordinator {
         DevHooks.fireProfileStart(server, "restore");
 
         try {
+            long t0 = System.nanoTime();
             prepareSnapshots(server);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.PREPARE, t0);
             if (player != null) {
                 PlayerRestorer.restoreAll(server, targetPlayerData, targetLevel);
             }
+            long t1 = System.nanoTime();
             restoreGlobals(server, targetPlayerData, targetPolicy);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.SERVER_GLOBALS, t1);
+            long t2 = System.nanoTime();
             restoreScoreboard(server, targetPlayerData, targetPolicy);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.SCOREBOARD, t2);
 
             int chunksProcessed = 0;
             int chunksQueued = 0;
@@ -103,13 +111,27 @@ public final class RollbackCoordinator {
                 if (data == null) {
                     continue;
                 }
+                long t3 = System.nanoTime();
                 WorldStateRestorer.restore(level, data);
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.WORLD_STATE, t3);
                 int[] counts = restoreChunks(level, data);
                 chunksProcessed += counts[0];
                 chunksQueued += counts[1];
                 data.setDirty();
+                long t4 = System.nanoTime();
                 dropStaleBlockEvents(level, data);
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.DROP_STALE_EVENTS, t4);
+                long t5 = System.nanoTime();
                 removeSnapshotEntities(level, data);
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.REMOVE_SNAPSHOT_ENTITIES, t5);
+            }
+
+            ru.reset.rzero.event.ServerTickEvents.drainEntityRestoreQueue();
+
+            if (player != null) {
+                long tOffline = System.nanoTime();
+                PlayerRestorer.restoreOfflineFiles(server, targetPlayerData);
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.OFFLINE_FILES, tOffline);
             }
 
             AdaptiveSaveEngine.resetAutoSaveTimer(server);

@@ -95,6 +95,8 @@ public final class CheckpointWriter {
                               UUID anchorId,
                               ServerPlayer player,
                               ChunkScope scope) {
+        long startNanos = System.nanoTime();
+        ru.reset.rzero.util.RZBenchmark.begin("CHECKPOINT CAPTURE", server.getTickCount());
         logIntent(anchorLevel, anchorId, player, scope);
 
         SnapshotRegistry.allowedSnapshotEntities.clear();
@@ -107,6 +109,10 @@ public final class CheckpointWriter {
 
         Set<UUID> anchorIds = resolveAnchorIds(server, anchorId, player);
         UUID primaryAnchor = anchorIds.isEmpty() ? anchorId : anchorIds.iterator().next();
+
+        int totalEntities = 0;
+        int totalChunks = 0;
+        RZBlobEncoder.Session globalSession = null;
 
         for (ServerLevel level : server.getAllLevels()) {
             if (scope != null && !scope.coversDim(level.dimension())) {
@@ -121,26 +127,63 @@ public final class CheckpointWriter {
 
             boolean isAnchor = level == anchorLevel;
             if (isAnchor) {
+                long t0 = System.nanoTime();
                 capturePlayers(server, level, data);
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_PLAYERS, t0);
+                ru.reset.rzero.util.RZBenchmark.addPlayers(server.getPlayerList().getPlayers().size());
+                long t1 = System.nanoTime();
                 captureAnchorGlobals(server, data, scope);
+                ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_GLOBALS, t1);
             } else {
                 data.adaptiveState = null;
                 data.scoreboardTag = null;
             }
 
+            long t2 = System.nanoTime();
             data.raidsTag = scope == null ? captureRaids(level) : null;
             data.dragonFightTag = scope == null ? captureDragonFight(level) : null;
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_RAIDS, t2);
+            long t3 = System.nanoTime();
             data.worldState = captureWorldState(level);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_WORLD_STATE, t3);
 
+            long t4 = System.nanoTime();
             captureChunks(level, data, scope);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_CHUNKS, t4);
+            ru.reset.rzero.util.RZBenchmark.addChunks(data.sectionSnapshots.size());
+
+            totalEntities += data.entities.size();
+            totalChunks += data.sectionSnapshots.size();
+            if (globalSession == null && data.asyncSession != null) {
+                globalSession = data.asyncSession;
+            }
 
             data.setDirty();
             SnapshotRegistry.activeSnapshots.put(level.dimension(), data);
-            RZero.LOGGER.info("[RZero] Timeline saved for dimension {}. Entities: {}",
-                    level.dimension().location(), data.entities.size());
             DevHooks.SAVE_PROFILER.endSave(level, data.entities.size());
         }
-        RZero.LOGGER.info("[RZero] Timeline anchors: {}", anchorIds.size());
+
+        long mainThreadNanos = System.nanoTime() - startNanos;
+        long mainThreadMillis = mainThreadNanos / 1_000_000L;
+        final int finalEntities = totalEntities;
+        final int finalChunks = totalChunks;
+
+        if (globalSession != null) {
+            globalSession.whenComplete(startNanos, stats -> {
+                long totalMillis = (System.nanoTime() - startNanos) / 1_000_000L;
+                long bgMillis = Math.max(0L, totalMillis - mainThreadMillis);
+                RZero.logInfo("[RZero] Checkpoint saved: main thread: {} ms | background encode: {} ms | Total: {} ms (Entities: {}, Chunks: {}, Blobs: {})",
+                        mainThreadMillis, bgMillis, totalMillis, finalEntities, finalChunks, stats.blobsCount());
+                ru.reset.rzero.util.RZBenchmark.setAsyncNote(
+                        String.format("Async Blobs: %.1f ms (Blobs: %d)", (double) bgMillis, stats.blobsCount()));
+                server.execute(ru.reset.rzero.util.RZBenchmark::endAndLog);
+            });
+        } else {
+            RZero.logInfo("[RZero] Checkpoint saved: main thread: {} ms | Total: {} ms (Entities: {}, Chunks: {})",
+                    mainThreadMillis, mainThreadMillis, finalEntities, finalChunks);
+            ru.reset.rzero.util.RZBenchmark.endAndLog();
+        }
+
         DevHooks.fireCheckpointSaved(server);
     }
 
@@ -149,16 +192,16 @@ public final class CheckpointWriter {
                                  ServerPlayer player,
                                  ChunkScope scope) {
         if (player != null) {
-            RZero.LOGGER.info("[RZero] Creating universal timeline snapshot for player: {}",
+            RZero.logInfo("[RZero] Creating checkpoint for player: {}",
                     player.getName().getString());
             Services.PLATFORM.sendToPlayer(player, new MarkChatPacket());
         } else if (scope != null) {
-            RZero.LOGGER.info(
+            RZero.logInfo(
                     "[RZero] Creating SCOPED headless timeline snapshot, anchor dim={} box=[{},{} .. {},{}]",
                     anchorLevel.dimension().location(),
                     scope.minChunkX(), scope.minChunkZ(), scope.maxChunkX(), scope.maxChunkZ());
         } else {
-            RZero.LOGGER.info("[RZero] Creating headless timeline snapshot, anchor dim={} id={}",
+            RZero.logInfo("[RZero] Creating headless timeline snapshot, anchor dim={} id={}",
                     anchorLevel.dimension().location(), anchorId);
         }
     }
@@ -252,6 +295,7 @@ public final class CheckpointWriter {
 
     private static void captureChunks(ServerLevel level, CheckpointData data, ChunkScope scope) {
         data.entities.clear();
+        data.entitiesByChunk.clear();
         data.entityRamSnapshots.clear();
         data.sectionSnapshots.clear();
         data.chunkBlockEntities.clear();
@@ -263,7 +307,7 @@ public final class CheckpointWriter {
         RZBlobEncoder.Session session = RZBlobEncoder.newSession();
         data.asyncSession = session;
 
-        Map<Long, List<Entity>> entitiesByChunk = groupEntitiesByChunk(level);
+        it.unimi.dsi.fastutil.longs.Long2ObjectMap<List<Entity>> entitiesByChunk = groupEntitiesByChunk(level);
 
         LongSet activeChunkKeys = SnapshotRegistry.loadedChunks.get(level.dimension());
         if (activeChunkKeys != null) {
@@ -287,21 +331,26 @@ public final class CheckpointWriter {
                     continue;
                 }
                 LevelChunk chunk = level.getChunk(cx, cz);
-                ChunkCapture.capture(level, chunk, data, session,
-                        entitiesByChunk.getOrDefault(key, List.of()));
+                ChunkCapture.capture(level, chunk, data, session, entitiesByChunk.get(key));
             }
         }
     }
 
-    private static Map<Long, List<Entity>> groupEntitiesByChunk(ServerLevel level) {
+    private static it.unimi.dsi.fastutil.longs.Long2ObjectMap<List<Entity>> groupEntitiesByChunk(ServerLevel level) {
         DevHooks.SAVE_PROFILER.beginPhase("entityGet");
-        Map<Long, List<Entity>> byChunk = new HashMap<>();
+        it.unimi.dsi.fastutil.longs.Long2ObjectMap<List<Entity>> byChunk =
+                new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
         for (Entity e : level.getAllEntities()) {
             if (e instanceof ServerPlayer) {
                 continue;
             }
             long chunkKey = ChunkPos.asLong(Mth.floor(e.getX()) >> 4, Mth.floor(e.getZ()) >> 4);
-            byChunk.computeIfAbsent(chunkKey, k -> new ArrayList<>()).add(e);
+            List<Entity> list = byChunk.get(chunkKey);
+            if (list == null) {
+                list = new ArrayList<>();
+                byChunk.put(chunkKey, list);
+            }
+            list.add(e);
         }
         DevHooks.SAVE_PROFILER.endPhase("entityGet");
         return byChunk;

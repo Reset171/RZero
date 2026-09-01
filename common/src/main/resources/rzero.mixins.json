@@ -28,6 +28,7 @@
     "level.MixinLevelTicksSchedule",
     "level.MixinLevelSubTick",
     "ai.MixinBrain",
+    "ai.MixinVillager",
     "spawn.MixinRaidsAccessor",
     "world.MixinAbstractFurnaceBlockEntity",
     "world.MixinAbstractContainerMenu",

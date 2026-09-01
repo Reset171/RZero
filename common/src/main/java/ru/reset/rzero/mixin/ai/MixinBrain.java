@@ -26,7 +26,8 @@ import java.util.Optional;
 public abstract class MixinBrain {
 
     @Unique
-    private static final ThreadLocal<Boolean> rzero$brainMaskActive = ThreadLocal.withInitial(() -> false);
+    private static final ThreadLocal<DeterministicRandomSource> rzero$THREAD_BRAIN_RANDOM =
+            ThreadLocal.withInitial(() -> new DeterministicRandomSource(0L));
 
     @Redirect(
             method = "<init>*",
@@ -45,12 +46,11 @@ public abstract class MixinBrain {
 
     @org.spongepowered.asm.mixin.injection.Inject(method = "tick", at = @At("HEAD"))
     private void rzero$setBrainRngContext(ServerLevel level, LivingEntity entity, CallbackInfo ci) {
-        if (!RZeroRuntime.checkpointPolicy().determinism().mobAi().brainRng()) {
-            rzero$brainMaskActive.set(false);
+        if (!RZeroRuntime.mobAiPolicy().brainRng()) {
             return;
         }
 
-        if (rzero$brainMaskActive.get()) {
+        if (BrainRngContext.get() != null) {
             RandomSource restored = RZeroRandomMask.resetLevel(level);
             if (restored != null) {
                 level.random = restored;
@@ -60,18 +60,18 @@ public abstract class MixinBrain {
         }
 
         long seed = entity.getUUID().getLeastSignificantBits() ^ level.getGameTime();
-        RandomSource detRandom = new DeterministicRandomSource(seed);
+        RandomSource detRandom = rzero$THREAD_BRAIN_RANDOM.get();
+        detRandom.setSeed(seed);
         BrainRngContext.set(detRandom);
 
         RandomSource saved = level.random;
         RZeroRandomMask.push(level, saved, detRandom);
         level.random = detRandom;
-        rzero$brainMaskActive.set(true);
     }
 
     @org.spongepowered.asm.mixin.injection.Inject(method = "tick", at = @At("RETURN"))
     private void rzero$clearBrainRngContext(ServerLevel level, LivingEntity entity, CallbackInfo ci) {
-        if (!rzero$brainMaskActive.get()) {
+        if (BrainRngContext.get() == null) {
             return;
         }
         RandomSource saved = RZeroRandomMask.pop(level);
@@ -79,6 +79,5 @@ public abstract class MixinBrain {
             level.random = saved;
         }
         BrainRngContext.clear();
-        rzero$brainMaskActive.set(false);
     }
 }

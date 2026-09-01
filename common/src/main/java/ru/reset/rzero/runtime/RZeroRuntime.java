@@ -23,9 +23,28 @@ public final class RZeroRuntime {
     private static volatile RZeroSettings settings = RZeroSettings.defaults();
     private static volatile RZeroCheckpointPolicy activeCheckpointPolicy = settings.checkpointPolicy();
 
+    private static volatile RZeroCheckpointPolicy.NaturalSpawn naturalSpawnPolicy =
+            activeCheckpointPolicy.determinism().naturalSpawn();
+    private static volatile RZeroCheckpointPolicy.MobAi mobAiPolicy =
+            activeCheckpointPolicy.determinism().mobAi();
+
     private static volatile RZeroAnchorSettings anchorSettings = settings.anchor();
 
     private RZeroRuntime() {
+    }
+
+    private static void refreshPolicyCache(RZeroCheckpointPolicy policy) {
+        RZeroCheckpointPolicy p = policy == null ? RZeroCheckpointPolicy.defaults() : policy;
+        naturalSpawnPolicy = p.determinism().naturalSpawn();
+        mobAiPolicy = p.determinism().mobAi();
+    }
+
+    public static RZeroCheckpointPolicy.NaturalSpawn naturalSpawnPolicy() {
+        return naturalSpawnPolicy;
+    }
+
+    public static RZeroCheckpointPolicy.MobAi mobAiPolicy() {
+        return mobAiPolicy;
     }
 
     public static RZeroSettings settings() {
@@ -35,6 +54,7 @@ public final class RZeroRuntime {
     public static void setSettings(RZeroSettings newSettings) {
         settings = newSettings == null ? RZeroSettings.defaults() : newSettings.sanitize();
         activeCheckpointPolicy = settings.checkpointPolicy();
+        refreshPolicyCache(activeCheckpointPolicy);
         rzerochashEnabled = settings.rzerochashEnabled();
         anchorSettings = settings.anchor();
     }
@@ -58,10 +78,12 @@ public final class RZeroRuntime {
 
     public static void setActiveCheckpointPolicy(RZeroCheckpointPolicy policy) {
         activeCheckpointPolicy = policy == null ? settings.checkpointPolicy() : policy.sanitize();
+        refreshPolicyCache(activeCheckpointPolicy);
     }
 
     public static void resetActiveCheckpointPolicyToConfig() {
         activeCheckpointPolicy = settings.checkpointPolicy();
+        refreshPolicyCache(activeCheckpointPolicy);
     }
 
     public static RZeroCheckpointPolicy checkpointPolicy() {

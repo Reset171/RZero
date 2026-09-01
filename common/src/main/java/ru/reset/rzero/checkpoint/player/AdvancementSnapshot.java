@@ -34,14 +34,19 @@ public final class AdvancementSnapshot {
         }
         ServerAdvancementManager manager = server.getAdvancements();
         for (AdvancementHolder advHolder : manager.getAllAdvancements()) {
-            AdvancementProgress currentProgress =
-                    player.getAdvancements().getOrStartProgress(advHolder);
             String advKey = advHolder.id().toString();
             CompoundTag savedProgressTag = saved.contains(advKey) ? saved.getCompound(advKey) : null;
+            AdvancementProgress currentProgress =
+                    player.getAdvancements().getOrStartProgress(advHolder);
+
+            if (!currentProgress.hasProgress() && savedProgressTag == null) {
+                continue;
+            }
 
             for (String criterion : advHolder.value().criteria().keySet()) {
                 boolean wasCompleted = savedProgressTag != null && savedProgressTag.getBoolean(criterion);
-                boolean isCompleted = currentProgress.getCriterion(criterion).isDone();
+                var criterionProgress = currentProgress.getCriterion(criterion);
+                boolean isCompleted = criterionProgress != null && criterionProgress.isDone();
                 if (isCompleted && !wasCompleted) {
                     player.getAdvancements().revoke(advHolder, criterion);
                 } else if (!isCompleted && wasCompleted) {

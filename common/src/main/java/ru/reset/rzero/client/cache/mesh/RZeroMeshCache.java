@@ -46,6 +46,9 @@ public final class RZeroMeshCache {
     private int lastCapturedSections;
     private int lastRestoredSections;
     private int lastSkippedFormat;
+    private long lastRestoreTimeNanos;
+
+    private static final long RESTORE_DEBOUNCE_NANOS = 50_000_000L;
 
     private RZeroMeshCache() {}
 
@@ -67,7 +70,7 @@ public final class RZeroMeshCache {
 
     public void clear() {
         if (!this.records.isEmpty() || this.arena.isAllocated()) {
-            RZero.LOGGER.info("[RZero][mesh] dropping snapshot ({} sections, {} MB)",
+            RZero.logInfo("[RZero][mesh] dropping snapshot ({} sections, {} MB)",
                     this.records.size(), this.arena.used() / (1024 * 1024));
         }
         this.records.clear();
@@ -75,6 +78,7 @@ public final class RZeroMeshCache {
         this.snapshotDimension = null;
         this.lastCapturedSections = 0;
         this.lastRestoredSections = 0;
+        this.lastRestoreTimeNanos = 0L;
     }
 
 
@@ -85,7 +89,7 @@ public final class RZeroMeshCache {
         }
         ViewArea viewArea = viewArea();
         if (viewArea == null || viewArea.sections == null) {
-            RZero.LOGGER.info("[RZero][mesh] capture skipped: no ViewArea yet");
+            RZero.logInfo("[RZero][mesh] capture skipped: no ViewArea yet");
             return false;
         }
 
@@ -173,7 +177,7 @@ public final class RZeroMeshCache {
         }
 
         if (pending.isEmpty()) {
-            RZero.LOGGER.info("[RZero][mesh] capture found no compiled geometry in r={} — nothing to cache", radius);
+            RZero.logInfo("[RZero][mesh] capture found no compiled geometry in r={} — nothing to cache", radius);
             return false;
         }
 
@@ -219,7 +223,7 @@ public final class RZeroMeshCache {
         this.lastCapturedSections = this.records.size();
         this.lastCaptureMillis = (System.nanoTime() - start) / 1_000_000L;
 
-        RZero.LOGGER.info("[RZero][mesh] capture OK: {} sections, {} layers, {}/{} MB arena "
+        RZero.logInfo("[RZero][mesh] capture OK: {} sections, {} layers, {}/{} MB arena "
                         + "(requested {} MB, dropped {} layers over budget), dim={}, center=[{},{}], r={}, {} ms",
                 this.records.size(), pending.size() - droppedBudget,
                 this.arena.used() / (1024 * 1024), this.arena.capacity() / (1024 * 1024),
@@ -232,6 +236,10 @@ public final class RZeroMeshCache {
     public int restore() {
         if (!this.hasSnapshot() || !MeshCacheSupport.isSupported()) {
             return 0;
+        }
+        long now = System.nanoTime();
+        if (now - this.lastRestoreTimeNanos < RESTORE_DEBOUNCE_NANOS && this.lastRestoredSections > 0) {
+            return this.lastRestoredSections;
         }
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null || this.snapshotDimension == null || !this.snapshotDimension.equals(level.dimension())) {
@@ -315,7 +323,8 @@ public final class RZeroMeshCache {
         long millis = (System.nanoTime() - start) / 1_000_000L;
         this.lastRestoredSections = restored;
         this.lastSkippedFormat = skippedFormat;
-        RZero.LOGGER.info("[RZero][Perf-Profile][mesh] restore: {} of {} sections reinstated without re-meshing "
+        this.lastRestoreTimeNanos = System.nanoTime();
+        RZero.logInfo("[RZero][Perf-Profile][mesh] restore: {} of {} sections reinstated without re-meshing "
                         + "({} layers skipped) | elapsed: {} ms",
                 restored, this.records.size(), skippedFormat, millis);
         return restored;

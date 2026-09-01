@@ -18,6 +18,7 @@ import ru.reset.rzero.checkpoint.data.EntityRAMSnapshot;
 import ru.reset.rzero.checkpoint.data.EntitySnapshot;
 import ru.reset.rzero.config.RZeroCheckpointPolicy;
 import ru.reset.rzero.runtime.RZeroRuntime;
+import ru.reset.rzero.runtime.RestoreQueues;
 import ru.reset.rzero.runtime.SnapshotRegistry;
 
 import java.util.ArrayList;
@@ -37,18 +38,23 @@ public final class EntityRestorer {
             return;
         }
 
+        long t0 = System.nanoTime();
         removeForeignEntities(level, cPos, policy);
+        ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.REMOVE_FOREIGN, t0);
+
+        long targetChunkKey = cPos.toLong();
+        List<EntitySnapshot> chunkEntities = data.getEntitiesForChunk(targetChunkKey);
+        if (chunkEntities.isEmpty()) {
+            return;
+        }
 
         Map<UUID, Mob> restoredMobs = new HashMap<>();
         List<EntitySnapshot> spawnedSnaps = new ArrayList<>();
-        long targetChunkKey = cPos.toLong();
 
         boolean rollbackItems = policy.droppedItems();
         boolean rollbackOrbs = policy.experienceOrbs();
-        for (EntitySnapshot snap : data.entities.toArray(new EntitySnapshot[0])) {
-            if (resolveChunkKey(snap) != targetChunkKey) {
-                continue;
-            }
+        long t1 = System.nanoTime();
+        for (EntitySnapshot snap : chunkEntities) {
             CompoundTag rawNbt = snap.decodeNbt();
             String idStr = rawNbt.getString("id");
             if (!rollbackItems && "minecraft:item".equals(idStr)) {
@@ -60,6 +66,8 @@ public final class EntityRestorer {
             spawnOrLoad(level, snap, restoredMobs, policy);
             spawnedSnaps.add(snap);
         }
+        ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.SPAWN_NBT, t1);
+        ru.reset.rzero.util.RZBenchmark.addMobs(restoredMobs.size());
 
         for (EntitySnapshot snap : spawnedSnaps) {
             Mob mob = restoredMobs.get(snap.uuid);
@@ -119,31 +127,37 @@ public final class EntityRestorer {
         }
 
         ((IRZeroServerLevel) level).rzero$eradicateGhostEntity(snap.uuid);
-        EntityType.loadEntityRecursive(nbtToLoad, level, e -> {
-            if (e == null) {
-                return null;
-            }
-            if (e.getUUID().equals(snap.uuid)) {
-                assignEntityId(level, e, snap, policy);
-                applyIdentity(e, snap, policy);
-            }
-            try {
-                boolean added = ((IRZeroServerLevel) level).rzero$surgicalSpawn(e);
-                if (!added) {
-                    RZero.LOGGER.warn(
-                            "[RZero-TAS-Audit] surgicalSpawn REJECTED for uuid={} (entityManager says UUID still known); discarding orphan",
-                            e.getUUID());
-                    e.discard();
-                } else if (e instanceof Mob m && e.getUUID().equals(snap.uuid)) {
-                    restoredMobs.put(snap.uuid, m);
+        boolean wasLoading = ru.reset.rzero.engine.BrainConstructionGate.loadingEntity;
+        ru.reset.rzero.engine.BrainConstructionGate.loadingEntity = policy.brainRam();
+        try {
+            EntityType.loadEntityRecursive(nbtToLoad, level, e -> {
+                if (e == null) {
+                    return null;
                 }
-            } catch (IllegalStateException ex) {
-                RZero.LOGGER.warn("[RZero] Suppressed Entity tracking collision for {}: {}",
-                        e.getUUID(), ex.getMessage());
-                e.discard();
-            }
-            return e;
-        });
+                if (e.getUUID().equals(snap.uuid)) {
+                    assignEntityId(level, e, snap, policy);
+                    applyIdentity(e, snap, policy);
+                }
+                try {
+                    boolean added = ((IRZeroServerLevel) level).rzero$surgicalSpawn(e);
+                    if (!added) {
+                        RZero.LOGGER.warn(
+                                "[RZero-TAS-Audit] surgicalSpawn REJECTED for uuid={} (entityManager says UUID still known); discarding orphan",
+                                e.getUUID());
+                        e.discard();
+                    } else if (e instanceof Mob m && e.getUUID().equals(snap.uuid)) {
+                        restoredMobs.put(snap.uuid, m);
+                    }
+                } catch (IllegalStateException ex) {
+                    RZero.LOGGER.warn("[RZero] Suppressed Entity tracking collision for {}: {}",
+                            e.getUUID(), ex.getMessage());
+                    e.discard();
+                }
+                return e;
+            });
+        } finally {
+            ru.reset.rzero.engine.BrainConstructionGate.loadingEntity = wasLoading;
+        }
     }
 
     private static CompoundTag filterNbtForPolicy(CompoundTag tag, RZeroCheckpointPolicy.Entities policy) {
@@ -200,13 +214,24 @@ public final class EntityRestorer {
                                   RZeroCheckpointPolicy.Entities policy) {
         if (policy.brainRam() && ram != null) {
             BrainRestorer.restore(mob, ram, snap);
+            long t0 = System.nanoTime();
             EntityCapture.applyMobRam(mob, ram);
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.APPLY_MOB_RAM, t0);
         }
 
         if (policy.target() && snap.targetUuid != null) {
-            Entity target = level.getEntity(snap.targetUuid);
+            Entity target = RestoreQueues.entityRemapCache.get(snap.targetUuid);
+            if (target != null && target.isRemoved()) {
+                target = null;
+            }
             if (target == null) {
-                target = level.getServer().getPlayerList().getPlayer(snap.targetUuid);
+                target = level.getEntity(snap.targetUuid);
+                if (target == null) {
+                    target = level.getServer().getPlayerList().getPlayer(snap.targetUuid);
+                }
+                if (target != null && !target.isRemoved()) {
+                    RestoreQueues.entityRemapCache.put(snap.targetUuid, target);
+                }
             }
             if (target instanceof LivingEntity le) {
                 mob.setTarget(le);
@@ -214,8 +239,9 @@ public final class EntityRestorer {
         }
 
         if (policy.navigation() && snap.hasPath) {
-            mob.getNavigation().moveTo(snap.pathTargetX, snap.pathTargetY, snap.pathTargetZ,
-                    snap.pathSpeed > 0 ? snap.pathSpeed : 1.0);
+            RestoreQueues.pendingPathRestores.add(new RestoreQueues.PathRestore(
+                    mob, snap.pathTargetX, snap.pathTargetY, snap.pathTargetZ,
+                    snap.pathSpeed > 0 ? snap.pathSpeed : 1.0));
         }
     }
 }

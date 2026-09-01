@@ -20,6 +20,7 @@ public class RZeroClient {
     private static Class<?> savedScreenClass = null;
     private static net.minecraft.client.RecipeBookCategories savedRecipeBookCategory = null;
     private static String savedSearchText = null;
+    private static net.minecraft.world.item.ItemStack savedCreativeCarried = null;
 
     public static void handleMarkChat() {
         Minecraft client = Minecraft.getInstance();
@@ -45,6 +46,15 @@ public class RZeroClient {
             savedScreenClass = client.screen.getClass();
         } else {
             savedScreenClass = null;
+        }
+
+        savedCreativeCarried = null;
+        if (policy.restoreInventoryScreen()
+                && client.screen instanceof net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen
+                && client.player != null
+                && client.player.containerMenu != null) {
+            net.minecraft.world.item.ItemStack carried = client.player.containerMenu.getCarried();
+            savedCreativeCarried = carried.isEmpty() ? net.minecraft.world.item.ItemStack.EMPTY : carried.copy();
         }
 
         if (policy.restoreCreativeTab()
@@ -154,6 +164,17 @@ public class RZeroClient {
                     && savedCreativeTab != null
                     && client.screen instanceof net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen creativeScreen) {
                 ((ru.reset.rzero.mixin.client.CreativeModeInventoryScreenAccessor) creativeScreen).rzero$selectTab(savedCreativeTab);
+            }
+
+            if (policy.restoreInventoryScreen()
+                    && savedCreativeCarried != null
+                    && client.screen instanceof net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen
+                    && client.player != null
+                    && client.player.containerMenu != null) {
+                client.player.containerMenu.setCarried(savedCreativeCarried.copy());
+                if (savedCreativeCarried.isEmpty()) {
+                    savedCreativeCarried = null;
+                }
             }
 
             if (policy.restoreRecipeBookTab()

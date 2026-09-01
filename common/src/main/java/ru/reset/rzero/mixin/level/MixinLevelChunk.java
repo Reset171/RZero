@@ -52,7 +52,7 @@ public abstract class MixinLevelChunk {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/state/BlockState;onPlace(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Z)V")
     )
     private void rzero$wrapOnPlace(BlockState instance, Level level, BlockPos pos, BlockState oldState, boolean isMoving, Operation<Void> original) {
-        if (ru.reset.rzero.checkpoint.CheckpointManager.isRestoringChunk.get()) return;
+        if (ru.reset.rzero.checkpoint.restore.ChunkRestorer.isRestoringChunk) return;
         original.call(instance, level, pos, oldState, isMoving);
     }
 
@@ -61,7 +61,7 @@ public abstract class MixinLevelChunk {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/state/BlockState;onRemove(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Z)V")
     )
     private void rzero$wrapOnRemove(BlockState instance, Level level, BlockPos pos, BlockState newState, boolean isMoving, Operation<Void> original) {
-        if (ru.reset.rzero.checkpoint.CheckpointManager.isRestoringChunk.get()) return;
+        if (ru.reset.rzero.checkpoint.restore.ChunkRestorer.isRestoringChunk) return;
         original.call(instance, level, pos, newState, isMoving);
     }
 }

@@ -48,7 +48,14 @@ public class CheckpointData extends SavedData {
     public final it.unimi.dsi.fastutil.longs.Long2ObjectMap<ListTag> chunkPois =
             it.unimi.dsi.fastutil.longs.Long2ObjectMaps.synchronize(new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
     public final List<EntitySnapshot> entities = new ArrayList<>();
+    public final it.unimi.dsi.fastutil.longs.Long2ObjectMap<List<EntitySnapshot>> entitiesByChunk =
+            it.unimi.dsi.fastutil.longs.Long2ObjectMaps.synchronize(new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
     public final java.util.Map<java.util.UUID, EntityRAMSnapshot> entityRamSnapshots = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public List<EntitySnapshot> getEntitiesForChunk(long chunkKey) {
+        List<EntitySnapshot> list = this.entitiesByChunk.get(chunkKey);
+        return list != null ? list : Collections.emptyList();
+    }
     public final it.unimi.dsi.fastutil.longs.Long2ObjectMap<SectionSnapshot[]> sectionSnapshots =
             it.unimi.dsi.fastutil.longs.Long2ObjectMaps.synchronize(new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
     public final it.unimi.dsi.fastutil.longs.Long2ObjectMap<List<BlockEntityEntry>> chunkBlockEntities = it.unimi.dsi.fastutil.longs.Long2ObjectMaps.synchronize(new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>());
@@ -290,7 +297,14 @@ public class CheckpointData extends SavedData {
         if (tag.contains("entities", Tag.TAG_LIST)) {
             ListTag entitiesTag = tag.getList("entities", Tag.TAG_COMPOUND);
             for (int i = 0; i < entitiesTag.size(); i++) {
-                d.entities.add(EntitySnapshot.fromNBT(entitiesTag.getCompound(i)));
+                EntitySnapshot es = EntitySnapshot.fromNBT(entitiesTag.getCompound(i));
+                d.entities.add(es);
+                List<EntitySnapshot> list = d.entitiesByChunk.get(es.chunkKey);
+                if (list == null) {
+                    list = new ArrayList<>();
+                    d.entitiesByChunk.put(es.chunkKey, list);
+                }
+                list.add(es);
             }
         }
 

@@ -59,7 +59,8 @@ public final class SectionSnapshot {
     }
 
     public int applyDiffTo(LevelChunkSection live, LevelChunk chunk, ServerLevel level,
-                           int xBase, int yBase, int zBase, boolean isDuringLoad) {
+                           int xBase, int yBase, int zBase, boolean isDuringLoad,
+                           it.unimi.dsi.fastutil.longs.LongList changedPositions) {
         int changed = 0;
         for (int y = 0; y < 16; y++) {
             for (int z = 0; z < 16; z++) {
@@ -70,13 +71,12 @@ public final class SectionSnapshot {
                     if (got != want) {
                         net.minecraft.core.BlockPos p =
                                 new net.minecraft.core.BlockPos(xBase + x, yBase + y, zBase + z);
-                        if (got.hasBlockEntity()) {
-                            live.setBlockState(x, y, z, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), false);
+                        if (got.hasBlockEntity() || chunk.getBlockEntity(p) != null) {
+                            chunk.removeBlockEntity(p);
                         }
                         chunk.setBlockState(p, want, false);
                         if (!isDuringLoad) {
-                            level.getChunkSource().blockChanged(p);
-                            level.getLightEngine().checkBlock(p);
+                            changedPositions.add(p.asLong());
                         }
                         changed++;
                     }

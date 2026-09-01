@@ -17,7 +17,7 @@ public class MixinSpawnState {
         at = @At("HEAD")
     )
     private void rzero$trackSpawnedMob(Mob mob, ChunkAccess chunk, CallbackInfo ci) {
-        var policy = RZeroRuntime.checkpointPolicy().determinism().naturalSpawn();
+        var policy = RZeroRuntime.naturalSpawnPolicy();
         if (policy.enabled() && policy.localCap()) {
             SpawnEngine.afterSpawn(mob);
         }

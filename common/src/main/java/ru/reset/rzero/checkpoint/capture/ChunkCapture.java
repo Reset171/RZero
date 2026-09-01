@@ -21,6 +21,7 @@ import ru.reset.rzero.api.DevHooks;
 import ru.reset.rzero.block.SectionSnapshot;
 import ru.reset.rzero.checkpoint.codec.ScheduledTickCodec;
 import ru.reset.rzero.checkpoint.data.CheckpointData;
+import ru.reset.rzero.checkpoint.data.EntitySnapshot;
 import ru.reset.rzero.runtime.SnapshotRegistry;
 import ru.reset.rzero.serial.RZBlobEncoder;
 
@@ -59,21 +60,29 @@ public final class ChunkCapture {
         }
 
         DevHooks.SAVE_PROFILER.beginPhase("blocks");
+        long t0 = System.nanoTime();
         data.sectionSnapshots.put(chunkKey, new SectionSnapshot[chunk.getSectionsCount()]);
         captureBlockEntities(level, chunk, data, session, chunkKey);
+        ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_BE, t0);
+        long t1 = System.nanoTime();
         captureScheduledTicks(level, data, chunkKey);
+        ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_TICKS_POIS, t1);
         DevHooks.SAVE_PROFILER.endPhase("blocks");
 
         DevHooks.SAVE_PROFILER.beginPhase("pois");
+        long t2 = System.nanoTime();
         ListTag pois = PoiCapture.capture(level, chunk.getPos());
         if (pois != null) {
             data.chunkPois.put(chunkKey, pois);
         }
+        ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_TICKS_POIS, t2);
         DevHooks.SAVE_PROFILER.endPhase("pois");
 
         DevHooks.SAVE_PROFILER.beginPhase("entities");
+        long t3 = System.nanoTime();
         captureBlockEvents(level, data, chunkKey);
         captureEntities(level, chunk, data, session, preloadedEntities, chunkKey);
+        ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CAPTURE_ENTITIES, t3);
         DevHooks.SAVE_PROFILER.endPhase("entities");
     }
 
@@ -89,9 +98,11 @@ public final class ChunkCapture {
         List<CompoundTag> beTags = new ArrayList<>(bePositions.size());
         for (BlockPos pos : bePositions) {
             BlockEntity be = chunk.getBlockEntity(pos);
-            if (be != null) {
+            if (be != null && chunk.getBlockState(pos).hasBlockEntity()) {
                 beTags.add(be.saveWithFullMetadata(level.registryAccess()));
                 liveBe.add(pos.immutable());
+            } else if (be != null) {
+                chunk.removeBlockEntity(pos);
             }
         }
         if (liveBe.isEmpty()) {
@@ -162,6 +173,7 @@ public final class ChunkCapture {
         }
         entities.sort(Comparator.comparing(Entity::getUUID));
 
+        List<EntitySnapshot> chunkSnapshots = new ArrayList<>(entities.size());
         for (Entity e : entities) {
             if (e == null || SnapshotRegistry.allowedSnapshotEntities.contains(e.getUUID())) {
                 continue;
@@ -170,11 +182,15 @@ public final class ChunkCapture {
             if (captured == null) {
                 continue;
             }
-            synchronized (data.entities) {
-                data.entities.add(captured.snapshot());
-                data.entityRamSnapshots.put(e.getUUID(), captured.ram());
-            }
+            chunkSnapshots.add(captured.snapshot());
+            data.entityRamSnapshots.put(e.getUUID(), captured.ram());
             SnapshotRegistry.allowedSnapshotEntities.add(e.getUUID());
+        }
+        if (!chunkSnapshots.isEmpty()) {
+            synchronized (data.entities) {
+                data.entities.addAll(chunkSnapshots);
+                data.entitiesByChunk.put(chunkKey, chunkSnapshots);
+            }
         }
     }
 }

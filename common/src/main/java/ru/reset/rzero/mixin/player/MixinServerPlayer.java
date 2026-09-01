@@ -28,7 +28,7 @@ public abstract class MixinServerPlayer {
         if (hasAnchor) {
             int cooldownSeconds = RZeroRuntime.anchorSettings().rollbackCooldownSeconds();
             if (!RollbackCooldown.tryConsume(cooldownSeconds, player.server.getTickCount())) {
-                RZero.LOGGER.info("[RZero] Rollback suppressed by cooldown for {} ({}s)",
+                RZero.logInfo("[RZero] Rollback suppressed by cooldown for {} ({}s)",
                         player.getName().getString(), cooldownSeconds);
                 return;
             }

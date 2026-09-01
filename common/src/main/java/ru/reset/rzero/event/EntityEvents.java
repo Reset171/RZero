@@ -16,6 +16,9 @@ import ru.reset.rzero.runtime.RZeroRuntime;
 import ru.reset.rzero.runtime.RestoreQueues;
 import ru.reset.rzero.runtime.SnapshotRegistry;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class EntityEvents {
 
     private EntityEvents() {
@@ -67,6 +70,12 @@ public final class EntityEvents {
             return;
         }
         activeSnapshot.entities.add(snap);
+        List<EntitySnapshot> list = activeSnapshot.entitiesByChunk.get(chunkKey);
+        if (list == null) {
+            list = new ArrayList<>();
+            activeSnapshot.entitiesByChunk.put(chunkKey, list);
+        }
+        list.add(snap);
         SnapshotRegistry.allowedSnapshotEntities.add(entity.getUUID());
         activeSnapshot.setDirty();
     }

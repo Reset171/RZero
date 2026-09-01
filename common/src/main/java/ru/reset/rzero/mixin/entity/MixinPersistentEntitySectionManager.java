@@ -1,9 +1,7 @@
 package ru.reset.rzero.mixin.entity;
 
-import ru.reset.rzero.runtime.RestoreQueues;
 import ru.reset.rzero.runtime.SnapshotRegistry;
 
-import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -69,15 +67,8 @@ public abstract class MixinPersistentEntitySectionManager implements IRZeroEntit
         long chunkKey = e.chunkPosition().toLong();
         ResourceKey<Level> dim = e.level().dimension();
 
-        boolean inRollback = false;
         CheckpointData data = SnapshotRegistry.activeSnapshots.get(dim);
-        if (data != null && data.pendingBlockRollbacks.contains(chunkKey)) {
-            inRollback = true;
-        }
-        if (!inRollback) {
-            Long2LongMap rollbacks = RestoreQueues.pendingEntityRollbacks.get(dim);
-            if (rollbacks != null && rollbacks.containsKey(chunkKey)) inRollback = true;
-        }
+        boolean inRollback = data != null && data.sectionSnapshots.containsKey(chunkKey);
 
         if (inRollback && !SnapshotRegistry.allowedSnapshotEntities.contains(uuid)) {
             cir.setReturnValue(false);

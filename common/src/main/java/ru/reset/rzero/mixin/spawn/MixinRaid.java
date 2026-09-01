@@ -74,7 +74,7 @@ public abstract class MixinRaid {
         if (pending != null) {
             rzero$pendingSeed.remove();
             long seed = pending[0];
-            RZero.LOGGER.info("[RZero-Dev] Created Raid with deterministic seed: {}", seed);
+            RZero.logInfo("[RZero-Dev] Created Raid with deterministic seed: {}", seed);
             return RandomSource.create(seed);
         }
         return RandomSource.create();
@@ -82,7 +82,7 @@ public abstract class MixinRaid {
 
     @Inject(method = "spawnGroup", at = @At("HEAD"))
     private void rzero$logSpawnGroup(net.minecraft.core.BlockPos pos, CallbackInfo ci) {
-        RZero.LOGGER.info("[RZero-Dev] Raid spawning group at: {}", pos);
+        RZero.logInfo("[RZero-Dev] Raid spawning group at: {}", pos);
     }
 
 

@@ -8,6 +8,7 @@ import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.monster.piglin.AbstractPiglin;
 import net.minecraft.world.entity.npc.Villager;
 import ru.reset.rzero.RZero;
+import ru.reset.rzero.access.IRZeroVillagerBrainMarker;
 import ru.reset.rzero.checkpoint.data.EntityRAMSnapshot;
 import ru.reset.rzero.checkpoint.data.EntitySnapshot;
 import ru.reset.rzero.engine.BrainCloner;
@@ -15,6 +16,9 @@ import ru.reset.rzero.mixin.entity.MixinLivingEntityAccessor;
 import ru.reset.rzero.mixin.entity.MixinMobAccessor;
 
 import java.util.Map;
+import java.util.UUID;
+
+import ru.reset.rzero.runtime.RestoreQueues;
 
 public final class BrainRestorer {
 
@@ -26,25 +30,50 @@ public final class BrainRestorer {
     }
 
     public static boolean restore(Mob mob, EntityRAMSnapshot ram, EntitySnapshot snap) {
+        long t0 = System.nanoTime();
+        boolean result;
         if (ram.clonedBrainAndNav != null && isComplexBrainMob(mob)) {
             if (restoreDeepClone(mob, ram)) {
                 snap.hasPath = false;
-                return true;
+                clearStripMarker(mob);
+                result = true;
+            } else {
+                rebuildStrippedBrain(mob);
+                restoreMemories(mob, ram);
+                result = false;
             }
-            return false;
+        } else {
+            rebuildStrippedBrain(mob);
+            restoreMemories(mob, ram);
+            result = false;
         }
-        restoreMemories(mob, ram);
-        return false;
+        ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.BRAIN_RELINK, t0);
+        return result;
+    }
+
+    private static void rebuildStrippedBrain(Mob mob) {
+        if (mob instanceof Villager villager
+                && ((IRZeroVillagerBrainMarker) villager).rzero$isBrainStripped()
+                && mob.level() instanceof ServerLevel level) {
+            ((IRZeroVillagerBrainMarker) villager).rzero$setBrainStripped(false);
+            villager.refreshBrain(level);
+        }
+    }
+
+    private static void clearStripMarker(Mob mob) {
+        if (mob instanceof Villager) {
+            ((IRZeroVillagerBrainMarker) mob).rzero$setBrainStripped(false);
+        }
     }
 
     private static boolean restoreDeepClone(Mob mob, EntityRAMSnapshot ram) {
         try {
+            ServerLevel level = (ServerLevel) mob.level();
+            long t0 = System.nanoTime();
             Object[] restoredBundle = BrainCloner.deepClone(
                     ram.clonedBrainAndNav,
-                    oldEnt -> {
-                        Entity newEnt = ((ServerLevel) mob.level()).getEntity(oldEnt.getUUID());
-                        return newEnt != null ? newEnt : oldEnt;
-                    });
+                    oldEnt -> resolveLiveEntity(level, oldEnt));
+            ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.BRAIN_DEEPCLONE, t0);
 
             Brain<?> restoredBrain = (Brain<?>) restoredBundle[0];
             PathNavigation restoredNav = (PathNavigation) restoredBundle[1];
@@ -57,6 +86,26 @@ public final class BrainRestorer {
                     "[RZero] Failed to restore deep cloned BrainAndNav for mob " + mob.getUUID(), ex);
             return false;
         }
+    }
+
+    private static Entity resolveLiveEntity(ServerLevel level, Entity oldEnt) {
+        Entity byIdentity = RestoreQueues.entityRemapByIdentity.get(oldEnt);
+        if (byIdentity != null && !byIdentity.isRemoved()) {
+            return byIdentity;
+        }
+        UUID uuid = oldEnt.getUUID();
+        Entity cached = RestoreQueues.entityRemapCache.get(uuid);
+        if (cached != null && !cached.isRemoved()) {
+            RestoreQueues.entityRemapByIdentity.put(oldEnt, cached);
+            return cached;
+        }
+        Entity resolved = level.getEntity(uuid);
+        if (resolved != null && !resolved.isRemoved()) {
+            RestoreQueues.entityRemapCache.put(uuid, resolved);
+            RestoreQueues.entityRemapByIdentity.put(oldEnt, resolved);
+            return resolved;
+        }
+        return resolved != null ? resolved : oldEnt;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

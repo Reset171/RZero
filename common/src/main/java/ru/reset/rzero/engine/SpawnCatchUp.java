@@ -9,10 +9,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.SingleThreadedRandomSource;
 import ru.reset.rzero.checkpoint.data.PendingSpawnLedger;
 
 public final class SpawnCatchUp {
+
+    private static final ThreadLocal<SingleThreadedRandomSource> REUSABLE_RANDOM =
+            ThreadLocal.withInitial(() -> new SingleThreadedRandomSource(0L));
 
     private SpawnCatchUp() {}
 
@@ -57,12 +60,12 @@ public final class SpawnCatchUp {
     private static void replayEpoch(ServerLevel level, LevelChunk chunk, long chunkKey, long epoch,
                                    long epochTicks, MobCategory category, long salt) {
         long seed = SpawnEngine.derive(level, chunkKey, epoch, salt);
-        SpawnEngine.Context ctx = new SpawnEngine.Context(
-                epoch, epoch * epochTicks, chunkKey, seed);
 
         IRZeroServerLevel det = (IRZeroServerLevel) level;
-        SpawnEngine.open(ctx);
-        det.rzero$pushDeterministicRandom(new LegacyRandomSource(seed));
+        SpawnEngine.open(epoch, epoch * epochTicks, chunkKey, seed);
+        SingleThreadedRandomSource rand = REUSABLE_RANDOM.get();
+        rand.setSeed(seed);
+        det.rzero$pushDeterministicRandom(rand);
         try {
             if (SpawnEngine.canSpawnLocally(level, chunk.getPos(), category)) {
                 NaturalSpawner.spawnCategoryForChunk(

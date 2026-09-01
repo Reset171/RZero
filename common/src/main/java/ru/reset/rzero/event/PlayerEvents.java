@@ -43,8 +43,7 @@ public final class PlayerEvents {
             CheckpointManager.setCheckpoint(player);
             AdaptiveSaveEngine.onCheckpointCreated(player.server, null, gameTime);
             AdaptiveSaveEngine.calculateNextInterval(overworld);
-            RZero.LOGGER.info(
-                    "[RZero] Zero Cycle Initiated: First checkpoint created upon joining the world.");
+            RZero.logInfo("[RZero] Initial checkpoint created on player join.");
         }
     }
 
@@ -57,7 +56,7 @@ public final class PlayerEvents {
         pd.applyTo(player, player.server, overworld.registryAccess(), RZeroRuntime.checkpointPolicy());
         AdvancementSnapshot.apply(player, player.server, pd.advancements);
         RZeroAdaptiveData.markDirty(player.server);
-        RZero.LOGGER.info("[RZero] Applied pending offline rollback for player {}",
+        RZero.logInfo("[RZero] Applied pending offline rollback for player {}",
                 player.getName().getString());
     }
 

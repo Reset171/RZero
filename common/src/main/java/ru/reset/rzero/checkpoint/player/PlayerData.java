@@ -415,14 +415,14 @@ public class PlayerData {
             d.spawnExtraParticlesOnFall = sacc.rzero$getSpawnExtraParticlesOnFall();
             BlockPos raidOmen = sacc.rzero$getRaidOmenPosition();
             if (raidOmen != null) {
-                RZero.LOGGER.info("[RZero] Saving raidOmenPosition: " + raidOmen);
+                RZero.logInfo("[RZero] Saving raidOmenPosition: " + raidOmen);
                 DataResult<Tag> enc = BlockPos.CODEC.encodeStart(NbtOps.INSTANCE, raidOmen);
                 enc.result().ifPresent(t -> {
-                    RZero.LOGGER.info("[RZero] Encoded raidOmenPosition tag: " + t.toString());
+                    RZero.logInfo("[RZero] Encoded raidOmenPosition tag: " + t.toString());
                     d.raidOmenPosition = t;
                 });
             } else {
-                RZero.LOGGER.info("[RZero] Player has NO raidOmenPosition at snapshot time!");
+                RZero.logInfo("[RZero] Player has NO raidOmenPosition at snapshot time!");
             }
             d.respawnAngle = sacc.rzero$getRespawnAngle();
         } catch (Throwable ignored) {}
@@ -662,14 +662,14 @@ public class PlayerData {
             player.seenCredits = seenCredits;
             sacc.rzero$setSpawnExtraParticlesOnFall(spawnExtraParticlesOnFall);
             if (raidOmenPosition != null) {
-                RZero.LOGGER.info("[RZero] raidOmenPosition tag is present: " + raidOmenPosition.toString());
+                RZero.logInfo("[RZero] raidOmenPosition tag is present: " + raidOmenPosition.toString());
                 BlockPos.CODEC.parse(NbtOps.INSTANCE, raidOmenPosition).result()
                         .ifPresent(pos -> {
-                            RZero.LOGGER.info("[RZero] Successfully parsed raidOmenPosition: " + pos);
+                            RZero.logInfo("[RZero] Successfully parsed raidOmenPosition: " + pos);
                             sacc.rzero$setRaidOmenPosition(pos);
                         });
             } else {
-                RZero.LOGGER.info("[RZero] raidOmenPosition tag is NULL!");
+                RZero.logInfo("[RZero] raidOmenPosition tag is NULL!");
                 sacc.rzero$setRaidOmenPosition(null);
             }
             sacc.rzero$setRespawnAngle(respawnAngle);
@@ -786,7 +786,11 @@ public class PlayerData {
 
         if (playersPolicy.openMenu() && openMenu != null) {
             try {
-                openMenu.restore(player, player.serverLevel(), lookup);
+                openMenu.restoreImmediate(player, lookup);
+                if (openMenu.menuTypeId != null) {
+                    ru.reset.rzero.runtime.RestoreQueues.enqueueMenuRestore(
+                            player.getUUID(), openMenu, player.serverLevel().getServer().getTickCount());
+                }
             } catch (Throwable t) {
                 RZero.LOGGER.warn(
                         "[RZero] OpenMenu restore failed: {}", t.getMessage());

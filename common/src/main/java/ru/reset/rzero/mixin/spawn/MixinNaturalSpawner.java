@@ -8,7 +8,7 @@ import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.SingleThreadedRandomSource;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,6 +26,10 @@ public class MixinNaturalSpawner {
     @Unique
     private static final ThreadLocal<Boolean> rzero$spawnMaskActive = ThreadLocal.withInitial(() -> false);
 
+    @Unique
+    private static final ThreadLocal<SingleThreadedRandomSource> rzero$REUSABLE_SPAWN_RANDOM =
+            ThreadLocal.withInitial(() -> new SingleThreadedRandomSource(0L));
+
     @Inject(
         method = "spawnForChunk(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/LevelChunk;Lnet/minecraft/world/level/NaturalSpawner$SpawnState;ZZZ)V",
         at = @At("HEAD")
@@ -34,7 +38,7 @@ public class MixinNaturalSpawner {
             ServerLevel level, LevelChunk chunk, NaturalSpawner.SpawnState state,
             boolean spawnFriendlies, boolean spawnEnemies, boolean spawnPassives,
             CallbackInfo ci) {
-        RZeroCheckpointPolicy.NaturalSpawn policy = RZeroRuntime.checkpointPolicy().determinism().naturalSpawn();
+        RZeroCheckpointPolicy.NaturalSpawn policy = RZeroRuntime.naturalSpawnPolicy();
         if (!policy.enabled() || !policy.useSpawnEngine()) {
             rzero$spawnMaskActive.set(false);
             return;
@@ -54,8 +58,10 @@ public class MixinNaturalSpawner {
 
         long seed = SpawnEngine.derive(level, chunkKey, gameTime, SpawnEngine.SALT_NATURAL_SPAWN);
 
-        SpawnEngine.open(new SpawnEngine.Context(SpawnEngine.epochOf(gameTime), gameTime, chunkKey, seed));
-        ((IRZeroServerLevel) level).rzero$pushDeterministicRandom(new LegacyRandomSource(seed));
+        SpawnEngine.open(SpawnEngine.epochOf(gameTime), gameTime, chunkKey, seed);
+        SingleThreadedRandomSource rand = rzero$REUSABLE_SPAWN_RANDOM.get();
+        rand.setSeed(seed);
+        ((IRZeroServerLevel) level).rzero$pushDeterministicRandom(rand);
         rzero$spawnMaskActive.set(true);
     }
 
@@ -83,7 +89,7 @@ public class MixinNaturalSpawner {
             NaturalSpawner.SpawnState instance, MobCategory category, ChunkPos pos,
             ServerLevel level, LevelChunk chunk, NaturalSpawner.SpawnState state,
             boolean spawnFriendlies, boolean spawnEnemies, boolean spawnPassives) {
-        RZeroCheckpointPolicy.NaturalSpawn policy = RZeroRuntime.checkpointPolicy().determinism().naturalSpawn();
+        RZeroCheckpointPolicy.NaturalSpawn policy = RZeroRuntime.naturalSpawnPolicy();
         if (!policy.enabled() || !policy.localCap()) {
             return ((MixinSpawnStateAccessor) instance).rzero$invokeCanSpawnForCategory(category, pos);
         }

@@ -72,6 +72,7 @@ public final class RZeroVisualRollbackManager {
             SectionOcclusionGraph sog = lra.rzero$getSectionOcclusionGraph();
             if (sog != null) {
                 sog.invalidate();
+                RZeroClientCache.get().requestSyncOcclusion();
             }
         }
 

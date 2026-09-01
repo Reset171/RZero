@@ -99,7 +99,8 @@ public class BrainCloner {
     }
 
     private static CloneAction getAction(Class<?> clazz, Object obj) {
-        return ACTION_CACHE.computeIfAbsent(clazz, c -> determineAction(c, obj));
+        CloneAction cached = ACTION_CACHE.get(clazz);
+        return cached != null ? cached : ACTION_CACHE.computeIfAbsent(clazz, c -> determineAction(c, obj));
     }
 
     private static CloneAction determineAction(Class<?> clazz, Object obj) {
@@ -178,6 +179,8 @@ public class BrainCloner {
     }
 
     private static FastField[] getCachedFields(Class<?> clazz) {
+        FastField[] cached = FIELD_CACHE.get(clazz);
+        if (cached != null) return cached;
         return FIELD_CACHE.computeIfAbsent(clazz, k -> {
             List<FastField> validFields = new ArrayList<>();
             Class<?> current = k;
@@ -205,13 +208,22 @@ public class BrainCloner {
         });
     }
 
+    private static final ThreadLocal<IdentityHashMap<Object, Object>> VISITED_MAP =
+            ThreadLocal.withInitial(() -> new IdentityHashMap<>(512));
+
     public static <T> T deepClone(T obj) {
         return deepClone(obj, null);
     }
 
     public static <T> T deepClone(T obj, java.util.function.Function<net.minecraft.world.entity.Entity, net.minecraft.world.entity.Entity> entityRemapper) {
         if (unsafe == null) return obj;
-        return deepClone(obj, new IdentityHashMap<>(), entityRemapper);
+        IdentityHashMap<Object, Object> visited = VISITED_MAP.get();
+        visited.clear();
+        try {
+            return deepClone(obj, visited, entityRemapper);
+        } finally {
+            visited.clear();
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -225,12 +237,20 @@ public class BrainCloner {
             case RETURN_AS_IS:
                 return obj;
             case CLONE_ENTITY:
-                if (entityRemapper != null) return (T) entityRemapper.apply((net.minecraft.world.entity.Entity) obj);
+                if (entityRemapper != null) {
+                    Object mapped = visited.get(obj);
+                    if (mapped == null) {
+                        mapped = entityRemapper.apply((net.minecraft.world.entity.Entity) obj);
+                        visited.put(obj, mapped);
+                    }
+                    return (T) mapped;
+                }
                 return obj;
         }
 
-        if (visited.containsKey(obj)) {
-            return (T) visited.get(obj);
+        Object prevClone = visited.get(obj);
+        if (prevClone != null) {
+            return (T) prevClone;
         }
 
         switch (action) {
@@ -306,6 +326,55 @@ public class BrainCloner {
                 return (T) clone;
             }
             case CLONE_ARRAY: {
+                if (obj instanceof byte[] arr) {
+                    byte[] clone = arr.clone();
+                    visited.put(obj, clone);
+                    return (T) clone;
+                }
+                if (obj instanceof int[] arr) {
+                    int[] clone = arr.clone();
+                    visited.put(obj, clone);
+                    return (T) clone;
+                }
+                if (obj instanceof long[] arr) {
+                    long[] clone = arr.clone();
+                    visited.put(obj, clone);
+                    return (T) clone;
+                }
+                if (obj instanceof float[] arr) {
+                    float[] clone = arr.clone();
+                    visited.put(obj, clone);
+                    return (T) clone;
+                }
+                if (obj instanceof double[] arr) {
+                    double[] clone = arr.clone();
+                    visited.put(obj, clone);
+                    return (T) clone;
+                }
+                if (obj instanceof boolean[] arr) {
+                    boolean[] clone = arr.clone();
+                    visited.put(obj, clone);
+                    return (T) clone;
+                }
+                if (obj instanceof short[] arr) {
+                    short[] clone = arr.clone();
+                    visited.put(obj, clone);
+                    return (T) clone;
+                }
+                if (obj instanceof char[] arr) {
+                    char[] clone = arr.clone();
+                    visited.put(obj, clone);
+                    return (T) clone;
+                }
+                if (obj instanceof Object[] arr) {
+                    int len = arr.length;
+                    Object[] clonedArray = (Object[]) java.lang.reflect.Array.newInstance(clazz.getComponentType(), len);
+                    visited.put(obj, clonedArray);
+                    for (int i = 0; i < len; i++) {
+                        clonedArray[i] = deepClone(arr[i], visited, entityRemapper);
+                    }
+                    return (T) clonedArray;
+                }
                 int length = java.lang.reflect.Array.getLength(obj);
                 Object clonedArray = java.lang.reflect.Array.newInstance(clazz.getComponentType(), length);
                 visited.put(obj, clonedArray);

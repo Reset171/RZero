@@ -78,7 +78,7 @@ public final class ServerLifecycleEvents {
         if (policy.rollback().entities().mobRamCache()) {
             seeded = MobRamCache.seedFrom(level, data, bootTick);
         }
-        RZero.LOGGER.info(
+        RZero.logInfo(
                 "[RZero] Loaded timeline for dimension: {}. Pending persistent chunks: {}, seeded mob RAM: {}",
                 level.dimension().location(), data.pendingBlockRollbacks.size(), seeded);
     }
@@ -102,7 +102,6 @@ public final class ServerLifecycleEvents {
     }
 
     public static void loadBrain() {
-        RZero.LOGGER.info(
-                "[RZero] Survival classification model initialized.");
+        RZero.logInfo("[RZero] Survival classifier initialized.");
     }
 }
