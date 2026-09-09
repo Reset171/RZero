@@ -19,6 +19,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -55,9 +56,12 @@ public class RZeroFabric implements ModInitializer {
 
         PayloadTypeRegistry.playC2S().register(SaveRequestPacket.TYPE, SaveRequestPacket.CODEC);
         PayloadTypeRegistry.playC2S().register(LoadRequestPacket.TYPE, LoadRequestPacket.CODEC);
+        PayloadTypeRegistry.playC2S().register(ru.reset.rzero.network.UpdateAnchorSettingsPacket.TYPE, ru.reset.rzero.network.UpdateAnchorSettingsPacket.CODEC);
         PayloadTypeRegistry.playS2C().register(MarkChatPacket.TYPE, MarkChatPacket.CODEC);
         PayloadTypeRegistry.playS2C().register(RollbackChatPacket.TYPE, RollbackChatPacket.CODEC);
         PayloadTypeRegistry.playS2C().register(RzerochashTogglePacket.TYPE, RzerochashTogglePacket.CODEC);
+        PayloadTypeRegistry.playS2C().register(ru.reset.rzero.network.SyncAnchorSettingsPacket.TYPE, ru.reset.rzero.network.SyncAnchorSettingsPacket.CODEC);
+        PayloadTypeRegistry.playS2C().register(ru.reset.rzero.network.OpenAnchorScreenPacket.TYPE, ru.reset.rzero.network.OpenAnchorScreenPacket.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(SaveRequestPacket.TYPE, (payload, context) -> {
             context.server().execute(() -> {
@@ -75,9 +79,29 @@ public class RZeroFabric implements ModInitializer {
             });
         });
 
+        ServerPlayNetworking.registerGlobalReceiver(ru.reset.rzero.network.UpdateAnchorSettingsPacket.TYPE, (payload, context) -> {
+            context.server().execute(() -> {
+                if (context.player().hasPermissions(2)) {
+                    RZeroRuntime.setAnchorSettings(payload.settings());
+                    ru.reset.rzero.RZeroConfig.save();
+                    ru.reset.rzero.anchor.RollbackCooldown.reset();
+                    ru.reset.rzero.runtime.SnapshotRegistry.syncActiveSnapshotAnchors(context.server());
+                    ru.reset.rzero.network.SyncAnchorSettingsPacket sync =
+                            new ru.reset.rzero.network.SyncAnchorSettingsPacket(payload.settings());
+                    for (ServerPlayer p : context.server().getPlayerList().getPlayers()) {
+                        ServerPlayNetworking.send(p, sync);
+                    }
+                    context.player().sendSystemMessage(
+                            Component.translatable("gui.rzero.anchor.applied")
+                    );
+                }
+            });
+        });
+
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             PlayerEvents.onPlayerJoin(handler.getPlayer());
             ServerPlayNetworking.send(handler.getPlayer(), new RzerochashTogglePacket(RZeroRuntime.rzerochashEnabled));
+            ServerPlayNetworking.send(handler.getPlayer(), new ru.reset.rzero.network.SyncAnchorSettingsPacket(RZeroRuntime.anchorSettings()));
         });
         
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {

@@ -18,8 +18,7 @@ public abstract class MixinMinecraftScreen {
     @ModifyVariable(method = "setScreen", at = @At("HEAD"), argsOnly = true)
     private Screen rzero$suppressReceivingLevelScreen(Screen screen) {
         if (screen instanceof ReceivingLevelScreen
-                && RZeroRuntime.clientRestore().suppressTerrainLoadingScreen()
-                && RZeroClientCache.get().isInterDimensionalRollback()) {
+                && (RZeroClientCache.get().isInterDimensionalRollback() || RZeroClientCache.get().isInRollback())) {
             RZero.logInfo("[RZero][cache] Suppressed ReceivingLevelScreen during rollback");
             return null;
         }

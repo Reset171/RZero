@@ -13,8 +13,7 @@ public abstract class MixinLevelLoadStatusManager {
 
     @Inject(method = "levelReady", at = @At("HEAD"), cancellable = true)
     private void rzero$forceReadyDuringRollback(CallbackInfoReturnable<Boolean> cir) {
-        if (RZeroRuntime.clientRestore().suppressTerrainLoadingScreen()
-                && (RZeroClientCache.get().isInterDimensionalRollback() || RZeroClientCache.get().isInRollback())) {
+        if (RZeroClientCache.get().isInterDimensionalRollback() || RZeroClientCache.get().isInRollback()) {
             cir.setReturnValue(true);
         }
     }

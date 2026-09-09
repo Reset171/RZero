@@ -209,8 +209,8 @@ public class RZeroConfigScreen {
         addSlider(adaptive, entryBuilder, "config.rzero.adaptive_postCombatSavePercent", state.adaptive_postCombatSavePercent, 0, 100, 70, val -> state.adaptive_postCombatSavePercent = val, false);
 
         if (currentUiMode == UiMode.EXPERT) {
-            addSlider(adaptive, entryBuilder, "config.rzero.adaptive_minSaveGapSeconds", state.adaptive_minSaveGapSeconds, 5, 300, 30, val -> state.adaptive_minSaveGapSeconds = val, false);
-            addSlider(adaptive, entryBuilder, "config.rzero.adaptive_relaxTimeSeconds", state.adaptive_relaxTimeSeconds, 1, 30, 5, val -> state.adaptive_relaxTimeSeconds = val, false);
+            addIntField(adaptive, entryBuilder, "config.rzero.adaptive_minSaveGapSeconds", state.adaptive_minSaveGapSeconds, 5, 86400, 30, val -> state.adaptive_minSaveGapSeconds = val, false);
+            addIntField(adaptive, entryBuilder, "config.rzero.adaptive_relaxTimeSeconds", state.adaptive_relaxTimeSeconds, 1, 86400, 5, val -> state.adaptive_relaxTimeSeconds = val, false);
         }
 
         ConfigCategory policy = builder.getOrCreateCategory(Component.translatable("config.rzero.category.policy"));
@@ -482,6 +482,18 @@ public class RZeroConfigScreen {
 
     private static void addSlider(ConfigCategory category, ConfigEntryBuilder entryBuilder, String key, int value, int min, int max, int defaultValue, Consumer<Integer> consumer, boolean hasTooltip) {
         IntSliderBuilder builder = entryBuilder.startIntSlider(Component.translatable(key), value, min, max)
+                .setDefaultValue(defaultValue)
+                .setSaveConsumer(consumer);
+        if (hasTooltip) {
+            builder.setTooltip(Component.translatable(key + ".tooltip"));
+        }
+        category.addEntry(builder.build());
+    }
+
+    private static void addIntField(ConfigCategory category, ConfigEntryBuilder entryBuilder, String key, int value, int min, int max, int defaultValue, Consumer<Integer> consumer, boolean hasTooltip) {
+        var builder = entryBuilder.startIntField(Component.translatable(key), value)
+                .setMin(min)
+                .setMax(max)
                 .setDefaultValue(defaultValue)
                 .setSaveConsumer(consumer);
         if (hasTooltip) {

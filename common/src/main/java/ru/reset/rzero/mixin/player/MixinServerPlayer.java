@@ -22,10 +22,11 @@ public abstract class MixinServerPlayer {
     @Inject(method = "die", at = @At("HEAD"), cancellable = true)
     private void rzero$onPlayerDeath(DamageSource damageSource, CallbackInfo ci) {
         ServerPlayer player = (ServerPlayer) (Object) this;
-        boolean hasAnchor = DetOrder.anyValueMatches(SnapshotRegistry.activeSnapshots,
-                data -> data.isAnchor(player.getUUID()));
+        boolean hasCheckpoint = SnapshotRegistry.hasCheckpoint();
+        boolean isAnchor = hasCheckpoint && ru.reset.rzero.anchor.AnchorSelector.resolveAnchors(
+                player.server, player.server.overworld().getGameTime(), null).contains(player.getUUID());
 
-        if (hasAnchor) {
+        if (isAnchor) {
             int cooldownSeconds = RZeroRuntime.anchorSettings().rollbackCooldownSeconds();
             if (!RollbackCooldown.tryConsume(cooldownSeconds, player.server.getTickCount())) {
                 RZero.logInfo("[RZero] Rollback suppressed by cooldown for {} ({}s)",

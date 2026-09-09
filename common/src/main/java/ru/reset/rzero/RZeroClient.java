@@ -155,9 +155,18 @@ public class RZeroClient {
                 }
             }
 
-            if (policy.resetHurtAnimation() && client.player != null) {
-                ((ru.reset.rzero.mixin.entity.MixinLivingEntityAccessor) client.player).rzero$setHurtTime(0);
-                ((ru.reset.rzero.mixin.entity.MixinLivingEntityAccessor) client.player).rzero$setDeathTime(0);
+            if (client.level != null) {
+                for (net.minecraft.world.entity.player.Player p : client.level.players()) {
+                    ((ru.reset.rzero.mixin.entity.MixinLivingEntityAccessor) p).rzero$setHurtTime(0);
+                    ((ru.reset.rzero.mixin.entity.MixinLivingEntityAccessor) p).rzero$setDeathTime(0);
+                    ((ru.reset.rzero.mixin.entity.MixinLivingEntityAccessor) p).rzero$setDead(false);
+                    p.setPose(net.minecraft.world.entity.Pose.STANDING);
+                    p.setOldPosAndRot();
+                }
+            }
+
+            if (client.player != null) {
+                client.player.input = new net.minecraft.client.player.KeyboardInput(client.options);
             }
 
             if (policy.restoreCreativeTab()
@@ -220,6 +229,17 @@ public class RZeroClient {
         RZeroClientCache.get().setEnabled(enabled);
     }
 
+    public static void handleSyncAnchorSettings(ru.reset.rzero.network.SyncAnchorSettingsPacket payload) {
+        RZeroRuntime.setAnchorSettings(payload.settings());
+    }
+
+    public static void handleOpenAnchorScreen() {
+        Minecraft client = Minecraft.getInstance();
+        if (client.player != null && client.player.hasPermissions(2)) {
+            client.setScreen(new ru.reset.rzero.client.gui.RZeroAnchorScreen());
+        }
+    }
+
     public static void clientTick() {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null) return;
@@ -229,6 +249,16 @@ public class RZeroClient {
         }
         while (KeyBindings.LOAD_KEY.consumeClick()) {
             Services.PLATFORM.sendToServer(new LoadRequestPacket());
+        }
+        while (KeyBindings.ANCHOR_MENU_KEY.consumeClick()) {
+            if (client.player.hasPermissions(2)) {
+                client.setScreen(new ru.reset.rzero.client.gui.RZeroAnchorScreen());
+            } else {
+                client.player.displayClientMessage(
+                        net.minecraft.network.chat.Component.translatable("gui.rzero.anchor.no_permission"),
+                        true
+                );
+            }
         }
 
         RZeroClientCache cache = RZeroClientCache.get();

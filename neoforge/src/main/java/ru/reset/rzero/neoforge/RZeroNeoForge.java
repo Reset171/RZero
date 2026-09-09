@@ -59,6 +59,7 @@ public class RZeroNeoForge {
             ServerPlayer p = (ServerPlayer) e.getEntity();
             PlayerEvents.onPlayerJoin(p);
             ru.reset.rzero.platform.Services.PLATFORM.sendToPlayer(p, new RzerochashTogglePacket(RZeroRuntime.rzerochashEnabled));
+            ru.reset.rzero.platform.Services.PLATFORM.sendToPlayer(p, new ru.reset.rzero.network.SyncAnchorSettingsPacket(RZeroRuntime.anchorSettings()));
         });
         NeoForge.EVENT_BUS.addListener((PlayerInteractEvent.RightClickBlock e) -> PlayerEvents.onRightClickBlock(e.getEntity(), e.getLevel()));
         NeoForge.EVENT_BUS.addListener((PlayerInteractEvent.RightClickItem e) -> PlayerEvents.onRightClickItem(e.getEntity(), e.getLevel(), e.getItemStack()));
@@ -103,6 +104,33 @@ public class RZeroNeoForge {
                     RestoreQueues.pendingDeathRollback = context.player().getUUID();
                 }
             });
+        });
+
+        registrar.playToServer(ru.reset.rzero.network.UpdateAnchorSettingsPacket.TYPE, ru.reset.rzero.network.UpdateAnchorSettingsPacket.CODEC, (payload, context) -> {
+            context.enqueueWork(() -> {
+                if (context.player().hasPermissions(2)) {
+                    RZeroRuntime.setAnchorSettings(payload.settings());
+                    ru.reset.rzero.RZeroConfig.save();
+                    ru.reset.rzero.anchor.RollbackCooldown.reset();
+                    ru.reset.rzero.runtime.SnapshotRegistry.syncActiveSnapshotAnchors(context.player().getServer());
+                    ru.reset.rzero.network.SyncAnchorSettingsPacket sync =
+                            new ru.reset.rzero.network.SyncAnchorSettingsPacket(payload.settings());
+                    for (ServerPlayer p : context.player().getServer().getPlayerList().getPlayers()) {
+                        ru.reset.rzero.platform.Services.PLATFORM.sendToPlayer(p, sync);
+                    }
+                    context.player().sendSystemMessage(
+                            net.minecraft.network.chat.Component.translatable("gui.rzero.anchor.applied")
+                    );
+                }
+            });
+        });
+
+        registrar.playToClient(ru.reset.rzero.network.SyncAnchorSettingsPacket.TYPE, ru.reset.rzero.network.SyncAnchorSettingsPacket.CODEC, (payload, context) -> {
+            context.enqueueWork(() -> RZeroClient.handleSyncAnchorSettings(payload));
+        });
+
+        registrar.playToClient(ru.reset.rzero.network.OpenAnchorScreenPacket.TYPE, ru.reset.rzero.network.OpenAnchorScreenPacket.CODEC, (payload, context) -> {
+            context.enqueueWork(RZeroClient::handleOpenAnchorScreen);
         });
 
         registrar.playToClient(MarkChatPacket.TYPE, MarkChatPacket.CODEC, (payload, context) -> {

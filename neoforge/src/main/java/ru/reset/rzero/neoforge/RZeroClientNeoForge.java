@@ -18,6 +18,7 @@ public class RZeroClientNeoForge {
     public static void onKeyRegister(RegisterKeyMappingsEvent event) {
         event.register(KeyBindings.SAVE_KEY);
         event.register(KeyBindings.LOAD_KEY);
+        event.register(KeyBindings.ANCHOR_MENU_KEY);
     }
 
     @SubscribeEvent

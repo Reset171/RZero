@@ -42,6 +42,14 @@ public final class CommandRZeroBase {
                             return 1;
                         }))
                 .then(Commands.literal("anchor")
+                        .executes(ctx -> {
+                            ServerPlayer player = ctx.getSource().getPlayer();
+                            if (player != null) {
+                                ru.reset.rzero.platform.Services.PLATFORM.sendToPlayer(player, new ru.reset.rzero.network.OpenAnchorScreenPacket());
+                                return 1;
+                            }
+                            return reportAnchors(ctx.getSource());
+                        })
                         .then(Commands.literal("status")
                                 .executes(ctx -> reportAnchors(ctx.getSource())))
                         .then(Commands.literal("cooldown")
@@ -78,8 +86,8 @@ public final class CommandRZeroBase {
                                           Component feedback) {
         RZeroRuntime.setAnchorSettings(updated);
         ru.reset.rzero.RZeroConfig.save();
+        ru.reset.rzero.runtime.SnapshotRegistry.syncActiveSnapshotAnchors(source.getServer());
         source.sendSuccess(() -> feedback, true);
-        source.sendSuccess(() -> Component.translatable("command.rzero.anchor.hint.newCheckpoint"), false);
         return 1;
     }
 

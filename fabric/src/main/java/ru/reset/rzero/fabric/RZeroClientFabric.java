@@ -17,6 +17,7 @@ public class RZeroClientFabric implements ClientModInitializer {
     public void onInitializeClient() {
         KeyBindingHelper.registerKeyBinding(KeyBindings.SAVE_KEY);
         KeyBindingHelper.registerKeyBinding(KeyBindings.LOAD_KEY);
+        KeyBindingHelper.registerKeyBinding(KeyBindings.ANCHOR_MENU_KEY);
 
         ClientPlayNetworking.registerGlobalReceiver(MarkChatPacket.TYPE, (payload, context) -> {
             context.client().execute(RZeroClient::handleMarkChat);
@@ -29,6 +30,14 @@ public class RZeroClientFabric implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(RzerochashTogglePacket.TYPE, (payload, context) -> {
             context.client().execute(() -> RZeroClient.handleRzerochashToggle(payload.enabled()));
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(ru.reset.rzero.network.SyncAnchorSettingsPacket.TYPE, (payload, context) -> {
+            context.client().execute(() -> RZeroClient.handleSyncAnchorSettings(payload));
+        });
+
+        ClientPlayNetworking.registerGlobalReceiver(ru.reset.rzero.network.OpenAnchorScreenPacket.TYPE, (payload, context) -> {
+            context.client().execute(RZeroClient::handleOpenAnchorScreen);
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {

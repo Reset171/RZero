@@ -68,7 +68,7 @@ public final class PlayerRestorer {
                                    PlayerData pd,
                                    ServerLevel targetLevel,
                                    RZeroCheckpointPolicy policy) {
-        
+
         boolean wasRemoved = p.isRemoved();
         boolean isDead = p.getHealth() <= 0.0F || p.isDeadOrDying();
         boolean sameDimension = p.serverLevel() == targetLevel;

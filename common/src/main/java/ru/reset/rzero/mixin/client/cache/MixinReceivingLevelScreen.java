@@ -19,7 +19,7 @@ public abstract class MixinReceivingLevelScreen extends Screen {
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void rzero$closeIfSeamlessRollback(CallbackInfo ci) {
-        if (RZeroRuntime.clientRestore().suppressTerrainLoadingScreen() && RZeroClientCache.get().isInterDimensionalRollback()) {
+        if (RZeroClientCache.get().isInterDimensionalRollback() || RZeroClientCache.get().isInRollback()) {
             this.onClose();
         }
     }

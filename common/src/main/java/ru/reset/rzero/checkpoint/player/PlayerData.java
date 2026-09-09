@@ -541,7 +541,6 @@ public class PlayerData {
             }
             player.stopRiding();
             player.teleportTo(targetLevel, x, y, z, yRot, xRot);
-            targetLevel.getChunkSource().broadcast(player, new net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket(player));
             player.fallDistance = fallDistance;
         }
         if (playersPolicy.motion()) {

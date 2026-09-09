@@ -91,7 +91,7 @@ public final class RZeroRuntime {
     }
 
     public static RZeroCheckpointPolicy effectivePolicy(CheckpointData data) {
-        return data != null && data.policy != null ? data.policy : checkpointPolicy();
+        return checkpointPolicy();
     }
 
     public static RZeroClientRestoreSettings clientRestore() {

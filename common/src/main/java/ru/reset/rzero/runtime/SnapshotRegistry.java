@@ -46,28 +46,35 @@ public final class SnapshotRegistry {
     }
 
     public static java.util.List<ServerPlayer> findAnchorPlayers(MinecraftServer server) {
+        if (!hasCheckpoint()) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.Set<UUID> anchors = ru.reset.rzero.anchor.AnchorSelector.resolveAnchors(
+                server, server.overworld().getGameTime(), null);
         java.util.List<ServerPlayer> players = new java.util.ArrayList<>();
-        for (var entry : DetOrder.sortedEntries(activeSnapshots, k -> k.location().toString())) {
-            CheckpointData data = entry.getValue();
-            if (!data.anchorIds.isEmpty()) {
-                for (UUID id : data.anchorIds) {
-                    ServerPlayer p = server.getPlayerList().getPlayer(id);
-                    if (p != null) {
-                        players.add(p);
-                    }
-                }
-                return players;
-            }
-            if (data.anchorId != null) {
-                ServerPlayer p = server.getPlayerList().getPlayer(data.anchorId);
-                if (p != null) players.add(p);
-                return players;
+        for (UUID id : anchors) {
+            ServerPlayer p = server.getPlayerList().getPlayer(id);
+            if (p != null) {
+                players.add(p);
             }
         }
-        if (!server.getPlayerList().getPlayers().isEmpty()) {
+        if (players.isEmpty() && !server.getPlayerList().getPlayers().isEmpty()) {
             players.add(server.getPlayerList().getPlayers().get(0));
         }
         return players;
+    }
+
+    public static void syncActiveSnapshotAnchors(MinecraftServer server) {
+        if (server == null) return;
+        java.util.Set<UUID> anchors = ru.reset.rzero.anchor.AnchorSelector.resolveAnchors(
+                server, server.overworld().getGameTime(), null);
+        UUID primary = anchors.isEmpty() ? null : anchors.iterator().next();
+        for (CheckpointData data : activeSnapshots.values()) {
+            data.anchorId = primary;
+            data.anchorIds.clear();
+            data.anchorIds.addAll(anchors);
+            data.setDirty();
+        }
     }
 
     public static void clear() {
