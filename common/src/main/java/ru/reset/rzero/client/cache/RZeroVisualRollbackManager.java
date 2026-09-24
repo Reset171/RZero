@@ -63,16 +63,10 @@ public final class RZeroVisualRollbackManager {
             if (viewArea != null) {
                 viewArea.repositionCamera(x, z);
             }
-        }
-
-        RZeroMeshCache.get().restore();
-
-        if (levelRenderer != null) {
-            LevelRendererAccessor lra = (LevelRendererAccessor) levelRenderer;
             SectionOcclusionGraph sog = lra.rzero$getSectionOcclusionGraph();
             if (sog != null) {
-                sog.invalidate();
                 RZeroClientCache.get().requestSyncOcclusion();
+                sog.invalidate();
             }
         }
 

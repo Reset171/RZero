@@ -55,6 +55,7 @@ public class RZeroConfigScreen {
             boolean rollback_fluidTicks = current.checkpointPolicy().rollback().fluidTicks();
             boolean rollback_blockEvents = current.checkpointPolicy().rollback().blockEvents();
             boolean rollback_pois = current.checkpointPolicy().rollback().pois();
+            boolean rollback_biomes = current.checkpointPolicy().rollback().biomes();
 
             boolean rollback_players_position = current.checkpointPolicy().rollback().players().position();
             boolean rollback_players_motion = current.checkpointPolicy().rollback().players().motion();
@@ -70,6 +71,7 @@ public class RZeroConfigScreen {
             boolean rollback_players_recipeBook = current.checkpointPolicy().rollback().players().recipeBook();
             boolean rollback_players_spawnPoint = current.checkpointPolicy().rollback().players().spawnPoint();
             boolean rollback_players_score = current.checkpointPolicy().rollback().players().score();
+            boolean rollback_players_stats = current.checkpointPolicy().rollback().players().stats();
             boolean rollback_players_preserveNewPlayerInventory = current.checkpointPolicy().rollback().players().preserveNewPlayerInventory();
 
             boolean rollback_entities_presence = current.checkpointPolicy().rollback().entities().presence();
@@ -91,6 +93,8 @@ public class RZeroConfigScreen {
             boolean rollback_world_dragonFight = current.checkpointPolicy().rollback().world().dragonFight();
             boolean rollback_world_scoreboard = current.checkpointPolicy().rollback().world().scoreboard();
             boolean rollback_world_levelRng = current.checkpointPolicy().rollback().world().levelRng();
+            boolean rollback_world_difficulty = current.checkpointPolicy().rollback().world().difficulty();
+            boolean rollback_world_worldSpawn = current.checkpointPolicy().rollback().world().worldSpawn();
 
             boolean rollback_serverGlobals_bossbars = current.checkpointPolicy().rollback().world().serverGlobals().bossbars();
             boolean rollback_serverGlobals_forcedChunks = current.checkpointPolicy().rollback().world().serverGlobals().forcedChunks();
@@ -100,6 +104,8 @@ public class RZeroConfigScreen {
             boolean rollback_serverGlobals_savedData = current.checkpointPolicy().rollback().world().serverGlobals().savedData();
             boolean rollback_serverGlobals_serverTickCount = current.checkpointPolicy().rollback().world().serverGlobals().serverTickCount();
             boolean rollback_serverGlobals_shufflingCounter = current.checkpointPolicy().rollback().world().serverGlobals().shufflingCounter();
+            boolean rollback_serverGlobals_scheduledEvents = current.checkpointPolicy().rollback().world().serverGlobals().scheduledEvents();
+            boolean rollback_serverGlobals_tickRate = current.checkpointPolicy().rollback().world().serverGlobals().tickRate();
 
             boolean det_spawn_enabled = current.checkpointPolicy().determinism().naturalSpawn().enabled();
             boolean det_spawn_engine = current.checkpointPolicy().determinism().naturalSpawn().useSpawnEngine();
@@ -233,6 +239,7 @@ public class RZeroConfigScreen {
             addSubToggle(subRollbackPlayers, entryBuilder, "config.rzero.checkpointPolicy_rollback_players_cooldowns", state.rollback_players_cooldowns, true, val -> state.rollback_players_cooldowns = val);
             addSubToggle(subRollbackPlayers, entryBuilder, "config.rzero.checkpointPolicy_rollback_players_openMenu", state.rollback_players_openMenu, true, val -> state.rollback_players_openMenu = val);
             addSubToggle(subRollbackPlayers, entryBuilder, "config.rzero.checkpointPolicy_rollback_players_recipeBook", state.rollback_players_recipeBook, true, val -> state.rollback_players_recipeBook = val);
+            addSubToggle(subRollbackPlayers, entryBuilder, "config.rzero.checkpointPolicy_rollback_players_stats", state.rollback_players_stats, true, val -> state.rollback_players_stats = val);
         }
         policy.addEntry(subRollbackPlayers.build());
 
@@ -241,6 +248,8 @@ public class RZeroConfigScreen {
         addSubToggle(subRollbackWorld, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_time", state.rollback_world_time, true, val -> state.rollback_world_time = val);
         addSubToggle(subRollbackWorld, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_raids", state.rollback_world_raids, true, val -> state.rollback_world_raids = val);
         addSubToggle(subRollbackWorld, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_dragonFight", state.rollback_world_dragonFight, true, val -> state.rollback_world_dragonFight = val);
+        addSubToggle(subRollbackWorld, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_difficulty", state.rollback_world_difficulty, true, val -> state.rollback_world_difficulty = val);
+        addSubToggle(subRollbackWorld, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_worldSpawn", state.rollback_world_worldSpawn, true, val -> state.rollback_world_worldSpawn = val);
 
         if (currentUiMode == UiMode.EXPERT) {
             addSubToggle(subRollbackWorld, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_scoreboard", state.rollback_world_scoreboard, true, val -> state.rollback_world_scoreboard = val);
@@ -257,6 +266,7 @@ public class RZeroConfigScreen {
             addSubToggle(subRollbackBlocks, entryBuilder, "config.rzero.checkpointPolicy_rollback_fluidTicks", state.rollback_fluidTicks, true, val -> state.rollback_fluidTicks = val);
             addSubToggle(subRollbackBlocks, entryBuilder, "config.rzero.checkpointPolicy_rollback_blockEvents", state.rollback_blockEvents, true, val -> state.rollback_blockEvents = val);
             addSubToggle(subRollbackBlocks, entryBuilder, "config.rzero.checkpointPolicy_rollback_pois", state.rollback_pois, true, val -> state.rollback_pois = val);
+            addSubToggle(subRollbackBlocks, entryBuilder, "config.rzero.checkpointPolicy_rollback_biomes", state.rollback_biomes, true, val -> state.rollback_biomes = val);
         }
         policy.addEntry(subRollbackBlocks.build());
 
@@ -288,6 +298,8 @@ public class RZeroConfigScreen {
             addSubToggle(subServerGlobals, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_serverGlobals_savedData", state.rollback_serverGlobals_savedData, true, val -> state.rollback_serverGlobals_savedData = val);
             addSubToggle(subServerGlobals, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_serverGlobals_serverTickCount", state.rollback_serverGlobals_serverTickCount, true, val -> state.rollback_serverGlobals_serverTickCount = val);
             addSubToggle(subServerGlobals, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_serverGlobals_shufflingCounter", state.rollback_serverGlobals_shufflingCounter, true, val -> state.rollback_serverGlobals_shufflingCounter = val);
+            addSubToggle(subServerGlobals, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_serverGlobals_scheduledEvents", state.rollback_serverGlobals_scheduledEvents, true, val -> state.rollback_serverGlobals_scheduledEvents = val);
+            addSubToggle(subServerGlobals, entryBuilder, "config.rzero.checkpointPolicy_rollback_world_serverGlobals_tickRate", state.rollback_serverGlobals_tickRate, true, val -> state.rollback_serverGlobals_tickRate = val);
             policy.addEntry(subServerGlobals.build());
 
             ConfigCategory determinism = builder.getOrCreateCategory(Component.translatable("config.rzero.category.determinism"));
@@ -332,6 +344,7 @@ public class RZeroConfigScreen {
                     state.rollback_fluidTicks,
                     state.rollback_blockEvents,
                     state.rollback_pois,
+                    state.rollback_biomes,
                     new RZeroCheckpointPolicy.Players(
                             state.rollback_players_position,
                             state.rollback_players_motion,
@@ -347,6 +360,7 @@ public class RZeroConfigScreen {
                             state.rollback_players_recipeBook,
                             state.rollback_players_spawnPoint,
                             state.rollback_players_score,
+                            state.rollback_players_stats,
                             state.rollback_players_preserveNewPlayerInventory
                     ),
                     new RZeroCheckpointPolicy.Entities(
@@ -370,6 +384,8 @@ public class RZeroConfigScreen {
                             state.rollback_world_dragonFight,
                             state.rollback_world_scoreboard,
                             state.rollback_world_levelRng,
+                            state.rollback_world_difficulty,
+                            state.rollback_world_worldSpawn,
                             new RZeroCheckpointPolicy.ServerGlobals(
                                     state.rollback_serverGlobals_bossbars,
                                     state.rollback_serverGlobals_forcedChunks,
@@ -378,7 +394,9 @@ public class RZeroConfigScreen {
                                     state.rollback_serverGlobals_randomSequences,
                                     state.rollback_serverGlobals_savedData,
                                     state.rollback_serverGlobals_serverTickCount,
-                                    state.rollback_serverGlobals_shufflingCounter
+                                    state.rollback_serverGlobals_shufflingCounter,
+                                    state.rollback_serverGlobals_scheduledEvents,
+                                    state.rollback_serverGlobals_tickRate
                             )
                     )
             );

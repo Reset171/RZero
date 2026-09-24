@@ -130,7 +130,7 @@ public final class RollbackCoordinator {
 
             if (player != null) {
                 long tOffline = System.nanoTime();
-                PlayerRestorer.restoreOfflineFiles(server, targetPlayerData);
+                PlayerRestorer.restoreOfflineFiles(server, targetPlayerData, targetPolicy);
                 ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.OFFLINE_FILES, tOffline);
             }
 

@@ -40,9 +40,8 @@ public final class ServerTickEvents {
                 && RestoreQueues.chunksPendingEntityRestore.isEmpty()
                 && RestoreQueues.pendingPathRestores.isEmpty()
                 && RestoreQueues.pendingChunkResends.isEmpty()
-                && RestoreQueues.pendingMenuRestores.isEmpty()
-                && SnapshotRegistry.allPendingBlockRollbacksEmpty();
-        if (queuesEmpty) {
+                && RestoreQueues.pendingMenuRestores.isEmpty();
+        if (queuesEmpty || ru.reset.rzero.util.RZBenchmark.isTimedOut()) {
             ru.reset.rzero.util.RZBenchmark.endAndLog();
         }
 

@@ -28,6 +28,7 @@ public abstract class MixinLevelChunk {
     @Inject(method = "setBlockState(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Z)Lnet/minecraft/world/level/block/state/BlockState;", at = @At("HEAD"))
     private void onSetBlockState(BlockPos pos, BlockState state, boolean isMoving, CallbackInfoReturnable<BlockState> cir) {
         if (RZeroRuntime.isRestoring) return;
+        if (ru.reset.rzero.checkpoint.restore.ChunkRestorer.isRestoringChunk) return;
         Level level = this.getLevel();
         if (level.isClientSide()) return;
         CheckpointData data = SnapshotRegistry.activeSnapshots.get(level.dimension());
@@ -36,15 +37,20 @@ public abstract class MixinLevelChunk {
         LevelChunk chunk = (LevelChunk) (Object) this;
         long chunkKey = chunk.getPos().toLong();
         SectionSnapshot[] arr = data.sectionSnapshots.get(chunkKey);
-        if (arr == null) return;
+        if (arr == null) {
+            arr = new SectionSnapshot[chunk.getSectionsCount()];
+            data.sectionSnapshots.put(chunkKey, arr);
+        }
 
         int sectionIdx = chunk.getSectionIndex(pos.getY());
         if (sectionIdx < 0 || sectionIdx >= arr.length) return;
         if (arr[sectionIdx] != null) return;
 
         LevelChunkSection sec = chunk.getSection(sectionIdx);
-        arr[sectionIdx] = SectionSnapshot.capture(sec.getStates());
-        data.setDirty();
+        if (sec != null) {
+            arr[sectionIdx] = SectionSnapshot.capture(sec);
+            data.setDirty();
+        }
     }
 
     @WrapOperation(

@@ -33,6 +33,10 @@ public final class ChunkEvents {
             if (activeSnapshot.sectionSnapshots.containsKey(chunkKey)) {
                 CheckpointManager.applyChunkRestore(serverLevel, chunk, activeSnapshot, true);
                 RestoreQueues.chunksPendingEntityRestore.add(chunk);
+                if (serverLevel.getServer() != null) {
+                    RestoreQueues.enqueueChunkResend(serverLevel, chunk.getPos().x, chunk.getPos().z,
+                            serverLevel.getServer().getTickCount() + 1);
+                }
             }
             Long2LongMap rollbacks = RestoreQueues.rollbacksFor(serverLevel.dimension());
             rollbacks.put(chunkKey, now + WINDOW_TICKS);

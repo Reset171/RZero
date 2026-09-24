@@ -7,6 +7,7 @@ import com.mojang.serialization.Dynamic;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
@@ -19,6 +20,7 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.saveddata.maps.MapIndex;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+import net.minecraft.world.level.storage.ServerLevelData;
 import ru.reset.rzero.config.RZeroCheckpointPolicy;
 import ru.reset.rzero.util.DetOrder;
 
@@ -40,6 +42,10 @@ public class ServerGlobalsSnapshot {
     public long shufflingCounter;
     public Map<String, Map<String, CompoundTag>> savedDataSnapshots = new LinkedHashMap<>();
     public long[] levelRandomState;
+    public ListTag scheduledEvents;
+    public float tickRate = 20.0f;
+    public boolean isFrozen = false;
+    public boolean hasTickRate = false;
 
     public static void markGameRulesDirty() {
         ServerGlobalsCache.markGameRulesDirty();
@@ -72,6 +78,13 @@ public class ServerGlobalsSnapshot {
             }
             tag.put("savedData", allDims);
         }
+        if (scheduledEvents != null) {
+            tag.put("scheduledEvents", scheduledEvents);
+        }
+        if (hasTickRate) {
+            tag.putFloat("tickRate", tickRate);
+            tag.putBoolean("isFrozen", isFrozen);
+        }
         return tag;
     }
 
@@ -100,6 +113,14 @@ public class ServerGlobalsSnapshot {
                 }
                 s.savedDataSnapshots.put(dimKey, dimMap);
             }
+        }
+        if (tag.contains("scheduledEvents", Tag.TAG_LIST)) {
+            s.scheduledEvents = tag.getList("scheduledEvents", Tag.TAG_COMPOUND);
+        }
+        if (tag.contains("tickRate")) {
+            s.tickRate = tag.getFloat("tickRate");
+            s.isFrozen = tag.getBoolean("isFrozen");
+            s.hasTickRate = true;
         }
         return s;
     }
@@ -196,6 +217,24 @@ public class ServerGlobalsSnapshot {
             s.serverTickCount = ((ru.reset.rzero.mixin.level.MixinMinecraftServer)(Object) server).rzero$getTickCount();
         } catch (Throwable ignored) {}
         s.shufflingCounter = RZeroRuntime.shufflingCounter;
+
+        try {
+            if (server.overworld().getLevelData() instanceof ServerLevelData sld) {
+                var queue = sld.getScheduledEvents();
+                if (queue != null) {
+                    s.scheduledEvents = queue.store();
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        try {
+            net.minecraft.server.ServerTickRateManager trm = server.tickRateManager();
+            if (trm != null) {
+                s.tickRate = trm.tickrate();
+                s.isFrozen = trm.isFrozen();
+                s.hasTickRate = true;
+            }
+        } catch (Throwable ignored) {}
 
         return s;
     }
@@ -355,6 +394,35 @@ public class ServerGlobalsSnapshot {
         }
         if (effectivePolicy.shufflingCounter()) {
             RZeroRuntime.shufflingCounter = shufflingCounter;
+        }
+
+        if (effectivePolicy.scheduledEvents() && scheduledEvents != null) {
+            try {
+                if (server.overworld().getLevelData() instanceof ServerLevelData sld) {
+                    var queue = sld.getScheduledEvents();
+                    if (queue instanceof ru.reset.rzero.access.IRZeroTimerQueue rq) {
+                        rq.rzero$restore(scheduledEvents);
+                    }
+                }
+            } catch (Throwable t) {
+                RZero.LOGGER.warn("[RZero] ScheduledEvents restore failed: {}", t.getMessage());
+            }
+        }
+
+        if (effectivePolicy.tickRate() && hasTickRate) {
+            try {
+                net.minecraft.server.ServerTickRateManager trm = server.tickRateManager();
+                if (trm != null) {
+                    trm.setTickRate(tickRate);
+                    trm.setFrozen(isFrozen);
+                    if (trm.isSprinting()) {
+                        trm.stopSprinting();
+                    }
+                    trm.stopStepping();
+                }
+            } catch (Throwable t) {
+                RZero.LOGGER.warn("[RZero] TickRateManager restore failed: {}", t.getMessage());
+            }
         }
     }
 

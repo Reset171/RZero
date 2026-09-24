@@ -48,8 +48,6 @@ public final class RZeroClientCache {
 
     private volatile boolean inRollback;
 
-    private volatile boolean syncOcclusionNext;
-
     private volatile boolean enabled = true;
 
     private volatile boolean capturePending;
@@ -70,28 +68,12 @@ public final class RZeroClientCache {
     private int captureAttempts;
 
     private static final int MAX_CAPTURE_ATTEMPTS = 200;
-    private static final int CAPTURE_CHUNKS_PER_TICK = 32;
-
-    private boolean captureSessionActive;
-    private int captureCenterX;
-    private int captureCenterZ;
-    private int captureRadius;
-    private int captureCursorDx;
-    private int captureCursorDz;
-    private boolean captureCursorWrapped;
-    private int captureCapturedCount;
-    private int captureSkippedCount;
-    private int captureAlreadyFakeCount;
-    private int captureTotalCount;
-    private SpatialGrid<RZeroFakeChunk> captureGrid;
-
 
     private volatile SpatialGrid<RZeroFakeChunk> snapshotGrid;
 
     private final Map<UUID, SnapshotEntityState> snapshotEntities = new LinkedHashMap<>();
 
     public static boolean isCapturing = false;
-
 
     private volatile SpatialGrid<RZeroFakeChunk> activeGrid;
 
@@ -100,11 +82,6 @@ public final class RZeroClientCache {
     private volatile SpatialSectionGrid<DataLayer> blockLightGrid;
 
     private volatile SpatialSectionGrid<DataLayer> skyLightGrid;
-
-    private static final int LIGHT_CLEAR_DELAY_TICKS = 40;
-
-    private final it.unimi.dsi.fastutil.longs.Long2LongMap pendingLightClears =
-            new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
 
     private int activeFakeCount;
 
@@ -119,16 +96,23 @@ public final class RZeroClientCache {
     private volatile boolean isInterDimensionalRollback;
     private long interDimensionalRollbackArmTick = -1L;
 
+    private volatile boolean syncOcclusionRequested;
+
+    public void requestSyncOcclusion() {
+        this.syncOcclusionRequested = true;
+    }
+
+    public boolean consumeSyncOcclusionRequest() {
+        if (this.syncOcclusionRequested) {
+            this.syncOcclusionRequested = false;
+            return true;
+        }
+        return false;
+    }
+
     public ResourceKey<Level> snapshotDimension() { return snapshotDimension; }
     public boolean isInRollback() { return inRollback; }
 
-    public void requestSyncOcclusion() { this.syncOcclusionNext = true; }
-
-    public boolean pollSyncOcclusion() {
-        boolean value = this.syncOcclusionNext;
-        this.syncOcclusionNext = false;
-        return value;
-    }
     public boolean isPendingSectionRefresh() { return pendingSectionRefresh; }
 
     public void clearPendingRefresh() {
@@ -202,12 +186,10 @@ public final class RZeroClientCache {
         }
         capturePending = false;
         captureAttempts = 0;
-        captureSessionActive = false;
-        captureGrid = null;
     }
 
     public boolean tryDeferredCapture(ClientLevel level) {
-        if (!enabled) { capturePending = false; captureSessionActive = false; return false; }
+        if (!enabled) { capturePending = false; return false; }
         if (!capturePending) return false;
         captureAttempts++;
         boolean ok = capture(level);
@@ -219,12 +201,9 @@ public final class RZeroClientCache {
             RZero.LOGGER.warn("[RZero][cache] giving up after {} attempts — no chunks ever streamed in",
                     captureAttempts);
             capturePending = false;
-            captureSessionActive = false;
-            captureGrid = null;
         }
         return false;
     }
-
 
     public boolean capture(ClientLevel level) {
         if (!enabled) return false;
@@ -233,108 +212,75 @@ public final class RZeroClientCache {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player == null) return false;
 
-        if (!captureSessionActive) {
-            captureCenterX = player.chunkPosition().x;
-            captureCenterZ = player.chunkPosition().z;
-            captureRadius = Math.max(2, Minecraft.getInstance().options.getEffectiveRenderDistance());
-            captureGrid = new SpatialGrid<>(captureCenterX, captureCenterZ, captureRadius);
-            captureCursorDx = -captureRadius;
-            captureCursorDz = -captureRadius;
-            captureCursorWrapped = false;
-            captureCapturedCount = 0;
-            captureSkippedCount = 0;
-            captureAlreadyFakeCount = 0;
-            captureTotalCount = (2 * captureRadius + 1) * (2 * captureRadius + 1);
-            captureSessionActive = true;
-        }
+        int centerX = player.chunkPosition().x;
+        int centerZ = player.chunkPosition().z;
+        int radius = Math.max(2, Minecraft.getInstance().options.getEffectiveRenderDistance());
 
         ClientChunkCache cache = level.getChunkSource();
         LevelLightEngine lightEngine = level.getLightEngine();
         LayerLightEventListener blockLightView = lightEngine.getLayerListener(LightLayer.BLOCK);
         LayerLightEventListener skyLightView   = lightEngine.getLayerListener(LightLayer.SKY);
 
-        boolean sweepDone = false;
+        SpatialGrid<RZeroFakeChunk> grid = new SpatialGrid<>(centerX, centerZ, radius);
+
+        int captured = 0;
+        int skipped = 0;
+        int alreadyFake = 0;
+
         isCapturing = true;
         try {
-            int budget = CAPTURE_CHUNKS_PER_TICK;
-            while (budget-- > 0) {
-                int cx = captureCenterX + captureCursorDx;
-                int cz = captureCenterZ + captureCursorDz;
-                LevelChunk live = cache.getChunk(cx, cz, ChunkStatus.FULL, false);
-                if (live == null) { captureSkippedCount++; }
-                else if (live instanceof RZeroFakeChunk) { captureAlreadyFakeCount++; }
-                else {
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    int cx = centerX + dx;
+                    int cz = centerZ + dz;
+                    LevelChunk live = cache.getChunk(cx, cz, ChunkStatus.FULL, false);
+                    if (live == null) { skipped++; continue; }
+                    if (live instanceof RZeroFakeChunk) { alreadyFake++; continue; }
+
                     RZeroFakeChunk snapshot = snapshotChunk(level, live, blockLightView, skyLightView);
                     if (snapshot != null) {
-                        captureGrid.set(cx, cz, snapshot);
-                        captureCapturedCount++;
+                        grid.set(cx, cz, snapshot);
+                        captured++;
                     }
-                }
-
-                captureCursorDz++;
-                if (captureCursorDz > captureRadius) {
-                    captureCursorDz = -captureRadius;
-                    captureCursorDx++;
-                    if (captureCursorDx > captureRadius) {
-                        captureCursorDx = -captureRadius;
-                        captureCursorWrapped = true;
-                    }
-                }
-                if (captureCursorWrapped) {
-                    sweepDone = true;
-                    break;
                 }
             }
         } finally {
             isCapturing = false;
         }
 
-        if (!sweepDone) {
-            if (captureAttempts <= 1 || captureAttempts % 20 == 0) {
-                RZero.logInfo(
-                        "[RZero][cache] capture in progress: {}/{} chunks captured (skipped(null)={}, alreadyFake={}, attempt={})",
-                        captureCapturedCount, captureTotalCount, captureSkippedCount, captureAlreadyFakeCount, captureAttempts);
-            }
-            return false;
-        }
+        int total = (2 * radius + 1) * (2 * radius + 1);
 
-        if (captureCapturedCount == 0) {
+        if (captured == 0) {
             if (captureAttempts <= 1 || captureAttempts % 20 == 0) {
                 RZero.logInfo(
                         "[RZero][cache] capture pending: 0/{} chunks ready (skipped(null)={}, alreadyFake={}, attempt={})",
-                        captureTotalCount, captureSkippedCount, captureAlreadyFakeCount, captureAttempts);
+                        total, skipped, alreadyFake, captureAttempts);
             }
-            captureCursorDx = -captureRadius;
-            captureCursorDz = -captureRadius;
-            captureCursorWrapped = false;
-            captureCapturedCount = 0;
             return false;
         }
 
-        this.snapshotGrid = captureGrid;
-        captureGrid = null;
-        captureSessionActive = false;
+        this.snapshotGrid = grid;
 
         for (Entity entity : level.entitiesForRendering()) {
             if (entity instanceof LocalPlayer) continue;
             if (entity instanceof RemotePlayer) continue;
-            if (Math.abs(entity.chunkPosition().x - captureCenterX) > captureRadius) continue;
-            if (Math.abs(entity.chunkPosition().z - captureCenterZ) > captureRadius) continue;
+            if (Math.abs(entity.chunkPosition().x - centerX) > radius) continue;
+            if (Math.abs(entity.chunkPosition().z - centerZ) > radius) continue;
 
             snapshotEntities.put(entity.getUUID(), new SnapshotEntityState(entity));
         }
 
         this.snapshotDimension = level.dimension();
-        this.snapshotCenterX = captureCenterX;
-        this.snapshotCenterZ = captureCenterZ;
-        this.snapshotRadius = captureRadius;
+        this.snapshotCenterX = centerX;
+        this.snapshotCenterZ = centerZ;
+        this.snapshotRadius = radius;
 
         var restore = RZeroRuntime.clientRestore();
         if (restore.meshCacheEnabled()) {
-            int meshRadius = Math.min(captureRadius, restore.meshCacheRadius());
+            int meshRadius = Math.min(radius, restore.meshCacheRadius());
             try {
                 ru.reset.rzero.client.cache.mesh.RZeroMeshCache.get()
-                        .capture(level, captureCenterX, captureCenterZ, meshRadius, restore.meshCacheBudgetBytes());
+                        .capture(level, centerX, centerZ, meshRadius, restore.meshCacheBudgetBytes());
             } catch (Throwable t) {
                 RZero.LOGGER.warn("[RZero][mesh] capture failed, continuing with block-data cache only", t);
                 ru.reset.rzero.client.cache.mesh.RZeroMeshCache.get().clear();
@@ -343,8 +289,8 @@ public final class RZeroClientCache {
 
         RZero.logInfo(
                 "[RZero][cache] capture OK: chunks={}/{} (skipped(null)={}, alreadyFake={}), entities={}, dim={}, center=[{},{}], r={}, attempt={}",
-                captureCapturedCount, captureTotalCount, captureSkippedCount, captureAlreadyFakeCount, snapshotEntities.size(),
-                this.snapshotDimension.location(), captureCenterX, captureCenterZ, captureRadius, captureAttempts);
+                captured, total, skipped, alreadyFake, snapshotEntities.size(),
+                this.snapshotDimension.location(), centerX, centerZ, radius, captureAttempts);
         return true;
     }
 
@@ -438,8 +384,6 @@ public final class RZeroClientCache {
                     LevelChunk live = cache.getChunk(cx, cz, ChunkStatus.FULL, false);
                     if (live != null && !(live instanceof RZeroFakeChunk)) {
                         skippedAlreadyReal++;
-                        registerLightGrids(cx, cz, chunk, blockLight, skyLight);
-                        pendingLightClears.put(new ChunkPos(cx, cz).toLong(), lightClearDueTick());
                         continue;
                     }
 
@@ -448,7 +392,15 @@ public final class RZeroClientCache {
                     attached++;
                     level.onChunkLoaded(new ChunkPos(cx, cz));
 
-                    registerLightGrids(cx, cz, chunk, blockLight, skyLight);
+                    int sectionIdx = 0;
+                    for (int sectionY = chunk.getMinSection(); sectionY < chunk.getMaxSection(); sectionY++, sectionIdx++) {
+                        if (chunk.blockLight[sectionIdx] != null) {
+                            blockLight.set(cx, sectionY, cz, chunk.blockLight[sectionIdx]);
+                        }
+                        if (chunk.skyLight[sectionIdx] != null) {
+                            skyLight.set(cx, sectionY, cz, chunk.skyLight[sectionIdx]);
+                        }
+                    }
                 }
             }
         }
@@ -528,44 +480,6 @@ public final class RZeroClientCache {
                 attached, skippedAlreadyReal, spawned, snapshotEntities.size(), SESSION_TTL_TICKS);
     }
 
-    private void registerLightGrids(int cx, int cz, RZeroFakeChunk chunk,
-                                    SpatialSectionGrid<DataLayer> blockLight,
-                                    SpatialSectionGrid<DataLayer> skyLight) {
-        int sectionIdx = 0;
-        for (int sectionY = chunk.getMinSection(); sectionY < chunk.getMaxSection(); sectionY++, sectionIdx++) {
-            if (chunk.blockLight[sectionIdx] != null) {
-                blockLight.set(cx, sectionY, cz, chunk.blockLight[sectionIdx]);
-            }
-            if (chunk.skyLight[sectionIdx] != null) {
-                skyLight.set(cx, sectionY, cz, chunk.skyLight[sectionIdx]);
-            }
-        }
-    }
-
-    private static long lightClearDueTick() {
-        ClientLevel level = Minecraft.getInstance().level;
-        return level != null ? level.getGameTime() + LIGHT_CLEAR_DELAY_TICKS : Long.MAX_VALUE;
-    }
-
-    public void processLightClears(long currentGameTime) {
-        if (pendingLightClears.isEmpty()) return;
-        var entryIt = pendingLightClears.long2LongEntrySet().iterator();
-        while (entryIt.hasNext()) {
-            var entry = entryIt.next();
-            if (entry.getLongValue() <= currentGameTime) {
-                long key = entry.getLongKey();
-                entryIt.remove();
-                ChunkPos clearedPos = new ChunkPos(key);
-                int cx = clearedPos.x;
-                int cz = clearedPos.z;
-                SpatialSectionGrid<DataLayer> bl = blockLightGrid;
-                if (bl != null) bl.clearColumn(cx, cz);
-                SpatialSectionGrid<DataLayer> sl = skyLightGrid;
-                if (sl != null) sl.clearColumn(cx, cz);
-            }
-        }
-    }
-
     public void tickPendingRefresh() {
         if (!enabled || !pendingSectionRefresh) return;
         Minecraft mc = Minecraft.getInstance();
@@ -625,6 +539,7 @@ public final class RZeroClientCache {
             LevelRendererAccessor lra = (LevelRendererAccessor) levelRenderer;
             SectionOcclusionGraph sog = lra.rzero$getSectionOcclusionGraph();
             if (sog != null) {
+                requestSyncOcclusion();
                 sog.invalidate();
             }
         }
@@ -634,10 +549,9 @@ public final class RZeroClientCache {
     }
 
     public void tickSession() {
+        if (!enabled || !inRollback || pendingSectionRefresh) return;
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
-        processLightClears(level != null ? level.getGameTime() : Long.MAX_VALUE);
-        if (!enabled || !inRollback || pendingSectionRefresh) return;
         LocalPlayer player = mc.player;
         if (level == null || player == null || this.snapshotDimension == null || !this.snapshotDimension.equals(level.dimension())) return;
         long now = level.getGameTime();
@@ -676,9 +590,10 @@ public final class RZeroClientCache {
             grid.set(x, z, null);
             SpatialGrid<Boolean> cols = activeLightColumns;
             if (cols != null) cols.set(x, z, null);
-            if (blockLightGrid != null || skyLightGrid != null) {
-                pendingLightClears.put(ChunkPos.asLong(x, z), lightClearDueTick());
-            }
+            SpatialSectionGrid<DataLayer> bl = blockLightGrid;
+            if (bl != null) bl.clearColumn(x, z);
+            SpatialSectionGrid<DataLayer> sl = skyLightGrid;
+            if (sl != null) sl.clearColumn(x, z);
             activeFakeCount--;
         }
 
@@ -735,7 +650,6 @@ public final class RZeroClientCache {
         this.blockLightGrid = null;
         this.skyLightGrid = null;
         this.activeFakeCount = 0;
-        pendingLightClears.clear();
         spawnedFakeEntityIds.clear();
         fakeEntityByChunk.clear();
         refreshRollbackFlag();

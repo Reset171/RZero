@@ -36,6 +36,16 @@ public final class WorldStateRestorer {
             if (policy.rollback().world().weather()) {
                 broadcastWeather(level, data);
             }
+            if (policy.rollback().world().difficulty() && data.worldState.difficulty != null) {
+                net.minecraft.world.Difficulty diff = net.minecraft.world.Difficulty.byName(data.worldState.difficulty);
+                if (diff != null) {
+                    level.getServer().setDifficulty(diff, true);
+                    level.getServer().setDifficultyLocked(data.worldState.difficultyLocked);
+                }
+            }
+            if (policy.rollback().world().worldSpawn() && data.worldState.hasWorldSpawn && level.dimension() == net.minecraft.world.level.Level.OVERWORLD) {
+                level.setDefaultSpawnPos(new net.minecraft.core.BlockPos(data.worldState.spawnX, data.worldState.spawnY, data.worldState.spawnZ), data.worldState.spawnAngle);
+            }
         }
         if (policy.rollback().world().dragonFight()) {
             restoreDragonFight(level, data);

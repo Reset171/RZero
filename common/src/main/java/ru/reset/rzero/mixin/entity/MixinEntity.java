@@ -173,6 +173,10 @@ public abstract class MixinEntity implements ru.reset.rzero.access.IRZeroEntityR
         }
     }
 
+    @Unique
+    private static final java.util.concurrent.atomic.AtomicLong rzero$UNIQUE_SEED_SALT =
+            new java.util.concurrent.atomic.AtomicLong();
+
     @org.spongepowered.asm.mixin.injection.Redirect(
         method = "<init>",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/util/RandomSource;create()Lnet/minecraft/util/RandomSource;")
@@ -180,7 +184,8 @@ public abstract class MixinEntity implements ru.reset.rzero.access.IRZeroEntityR
     private RandomSource rzero$redirectEntityRandom() {
         RandomSource det = ru.reset.rzero.engine.RZeroRandomMask.peek();
         if (det != null) {
-            return new net.minecraft.world.level.levelgen.LegacyRandomSource(det.nextLong());
+            long salt = rzero$UNIQUE_SEED_SALT.incrementAndGet() * 0x9E3779B97F4A7C15L;
+            return new net.minecraft.world.level.levelgen.LegacyRandomSource(det.nextLong() ^ salt);
         }
         return RandomSource.create();
     }

@@ -111,8 +111,14 @@ public class RZeroClient {
                 java.util.List<net.minecraft.client.resources.sounds.SoundInstance> soundsToStop = new java.util.ArrayList<>();
                 for (net.minecraft.client.resources.sounds.SoundInstance sound : soundEngineAccessor.rzero$getInstanceToChannel().keySet()) {
                     if (!savedSounds.contains(sound)) {
-                        String path = sound.getLocation().getPath();
-                        if (path.contains("tnt") || path.contains("explode") || path.contains("firework") || path.contains("fuse") || path.contains("creeper")) {
+                        net.minecraft.sounds.SoundSource source = sound.getSource();
+                        if (source == net.minecraft.sounds.SoundSource.HOSTILE
+                                || source == net.minecraft.sounds.SoundSource.BLOCKS
+                                || source == net.minecraft.sounds.SoundSource.WEATHER
+                                || source == net.minecraft.sounds.SoundSource.PLAYERS
+                                || source == net.minecraft.sounds.SoundSource.NEUTRAL
+                                || source == net.minecraft.sounds.SoundSource.RECORDS
+                                || sound.isLooping()) {
                             soundsToStop.add(sound);
                         }
                     }
@@ -120,12 +126,17 @@ public class RZeroClient {
                 for (net.minecraft.client.resources.sounds.SoundInstance sound : soundsToStop) {
                     soundEngine.stop(sound);
                 }
+                if (client.getMusicManager() != null) {
+                    client.getMusicManager().stopPlaying();
+                }
             }
 
             if (policy.clearParticles()) {
                 ((ru.reset.rzero.mixin.client.ParticleEngineAccessor) client.particleEngine).rzero$clearParticles();
                 client.particleEngine.setLevel(client.level);
             }
+
+            client.getToasts().clear();
 
             ru.reset.rzero.RZeroClient.skipEquipAnimationTicks = policy.skipEquipAnimation() ? 5 : 0;
             ru.reset.rzero.RZeroClient.snapPlayerRotationTicks = policy.snapPlayerRotation() ? 5 : 0;

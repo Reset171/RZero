@@ -166,7 +166,7 @@ public final class RZeroMeshCache {
                 int indexId = 0;
                 if (sequential == null) {
                     indexId = acc.rzero$getIndexBufferId();
-                    indexSize = GeometryArena.queryBufferSize(indexId);
+                    indexSize = (long) indexCount * (long) acc.rzero$getIndexType().bytes;
                 }
 
                 pending.add(new PendingLayer(ps, type, vertexId, vertexSize, indexId, indexSize,

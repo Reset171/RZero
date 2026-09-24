@@ -222,6 +222,7 @@ public final class CheckpointWriter {
             data.playersData.put(p.getUUID(), pd);
         }
         OfflinePlayerFiles.backupInto(server, data.rawPlayersNbt);
+        OfflinePlayerFiles.backupStatsInto(server, data.rawPlayerStats);
     }
 
     private static void captureAnchorGlobals(MinecraftServer server, CheckpointData data, ChunkScope scope) {
@@ -289,6 +290,16 @@ public final class CheckpointWriter {
         }
         if (level.getRandom() instanceof IRZeroRandomState rState) {
             ws.rngState = rState.rzero$getState();
+        }
+        ws.difficulty = level.getDifficulty().getKey();
+        ws.difficultyLocked = level.getLevelData().isDifficultyLocked();
+        if (level.dimension() == net.minecraft.world.level.Level.OVERWORLD) {
+            BlockPos sp = level.getSharedSpawnPos();
+            ws.spawnX = sp.getX();
+            ws.spawnY = sp.getY();
+            ws.spawnZ = sp.getZ();
+            ws.spawnAngle = level.getSharedSpawnAngle();
+            ws.hasWorldSpawn = true;
         }
         return ws;
     }

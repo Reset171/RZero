@@ -63,10 +63,12 @@ public final class RZBenchmark {
 
     public static boolean isOpen() { return open; }
 
+    public static boolean isTimedOut() { return timedOut; }
+
     public static void tick(int currentTick) {
         if (!open) return;
         deferredTicks = Math.max(0, currentTick - startTick);
-        if (deferredTicks > 600) timedOut = true;
+        if (deferredTicks > 60) timedOut = true;
     }
 
     private static final Phase[] RESTORE_TOP_LEVEL = {

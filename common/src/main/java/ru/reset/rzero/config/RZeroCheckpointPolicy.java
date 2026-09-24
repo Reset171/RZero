@@ -61,6 +61,7 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
             boolean fluidTicks,
             boolean blockEvents,
             boolean pois,
+            boolean biomes,
             Players players,
             Entities entities,
             World world) {
@@ -72,6 +73,7 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
                 Codec.BOOL.optionalFieldOf("fluid_ticks", true).forGetter(Rollback::fluidTicks),
                 Codec.BOOL.optionalFieldOf("block_events", true).forGetter(Rollback::blockEvents),
                 Codec.BOOL.optionalFieldOf("pois", true).forGetter(Rollback::pois),
+                Codec.BOOL.optionalFieldOf("biomes", true).forGetter(Rollback::biomes),
                 Players.CODEC.optionalFieldOf("players", Players.defaults()).forGetter(Rollback::players),
                 Entities.CODEC.optionalFieldOf("entities", Entities.defaults()).forGetter(Rollback::entities),
                 World.CODEC.optionalFieldOf("world", World.defaults()).forGetter(Rollback::world)
@@ -84,12 +86,12 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
         }
 
         public static Rollback defaults() {
-            return new Rollback(true, true, true, true, true, true,
+            return new Rollback(true, true, true, true, true, true, true,
                     Players.defaults(), Entities.defaults(), World.defaults());
         }
 
         public Rollback sanitize() {
-            return new Rollback(blocks, blockEntities, blockTicks, fluidTicks, blockEvents, pois,
+            return new Rollback(blocks, blockEntities, blockTicks, fluidTicks, blockEvents, pois, biomes,
                     players, entities, world);
         }
 
@@ -128,6 +130,7 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
             boolean recipeBook,
             boolean spawnPoint,
             boolean score,
+            boolean stats,
             boolean preserveNewPlayerInventory) {
 
         public static final Codec<Players> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -145,12 +148,13 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
                 Codec.BOOL.optionalFieldOf("recipe_book", true).forGetter(Players::recipeBook),
                 Codec.BOOL.optionalFieldOf("spawn_point", true).forGetter(Players::spawnPoint),
                 Codec.BOOL.optionalFieldOf("score", true).forGetter(Players::score),
+                Codec.BOOL.optionalFieldOf("stats", true).forGetter(Players::stats),
                 Codec.BOOL.optionalFieldOf("preserve_new_player_inventory", false).forGetter(Players::preserveNewPlayerInventory)
         ).apply(instance, Players::new));
 
         public static Players defaults() {
             return new Players(true, true, true, true, true, true, true, true,
-                    true, true, true, true, true, true, false);
+                    true, true, true, true, true, true, true, false);
         }
 
         public Players sanitize() {
@@ -241,6 +245,8 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
             boolean dragonFight,
             boolean scoreboard,
             boolean levelRng,
+            boolean difficulty,
+            boolean worldSpawn,
             ServerGlobals serverGlobals) {
 
         public static final Codec<World> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -250,6 +256,8 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
                 Codec.BOOL.optionalFieldOf("dragon_fight", true).forGetter(World::dragonFight),
                 Codec.BOOL.optionalFieldOf("scoreboard", true).forGetter(World::scoreboard),
                 Codec.BOOL.optionalFieldOf("level_rng", true).forGetter(World::levelRng),
+                Codec.BOOL.optionalFieldOf("difficulty", true).forGetter(World::difficulty),
+                Codec.BOOL.optionalFieldOf("world_spawn", true).forGetter(World::worldSpawn),
                 ServerGlobals.CODEC.optionalFieldOf("server_globals", ServerGlobals.defaults()).forGetter(World::serverGlobals)
         ).apply(instance, World::new));
 
@@ -258,11 +266,11 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
         }
 
         public static World defaults() {
-            return new World(true, true, true, true, true, true, ServerGlobals.defaults());
+            return new World(true, true, true, true, true, true, true, true, ServerGlobals.defaults());
         }
 
         public World sanitize() {
-            return new World(time, weather, raids, dragonFight, scoreboard, levelRng, serverGlobals);
+            return new World(time, weather, raids, dragonFight, scoreboard, levelRng, difficulty, worldSpawn, serverGlobals);
         }
 
         public JsonObject toJson() {
@@ -293,7 +301,9 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
             boolean randomSequences,
             boolean savedData,
             boolean serverTickCount,
-            boolean shufflingCounter) {
+            boolean shufflingCounter,
+            boolean scheduledEvents,
+            boolean tickRate) {
 
         public static final Codec<ServerGlobals> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Codec.BOOL.optionalFieldOf("bossbars", true).forGetter(ServerGlobals::bossbars),
@@ -303,11 +313,13 @@ public record RZeroCheckpointPolicy(Rollback rollback, Determinism determinism) 
                 Codec.BOOL.optionalFieldOf("random_sequences", true).forGetter(ServerGlobals::randomSequences),
                 Codec.BOOL.optionalFieldOf("saved_data", true).forGetter(ServerGlobals::savedData),
                 Codec.BOOL.optionalFieldOf("server_tick_count", true).forGetter(ServerGlobals::serverTickCount),
-                Codec.BOOL.optionalFieldOf("shuffling_counter", true).forGetter(ServerGlobals::shufflingCounter)
+                Codec.BOOL.optionalFieldOf("shuffling_counter", true).forGetter(ServerGlobals::shufflingCounter),
+                Codec.BOOL.optionalFieldOf("scheduled_events", true).forGetter(ServerGlobals::scheduledEvents),
+                Codec.BOOL.optionalFieldOf("tick_rate", true).forGetter(ServerGlobals::tickRate)
         ).apply(instance, ServerGlobals::new));
 
         public static ServerGlobals defaults() {
-            return new ServerGlobals(true, true, true, true, true, true, true, true);
+            return new ServerGlobals(true, true, true, true, true, true, true, true, true, true);
         }
 
         public ServerGlobals sanitize() {

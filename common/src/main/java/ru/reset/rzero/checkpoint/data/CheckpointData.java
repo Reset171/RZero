@@ -38,6 +38,7 @@ public class CheckpointData extends SavedData {
     public RZeroCheckpointPolicy policy;
     public final java.util.Map<java.util.UUID, PlayerData> playersData = new java.util.HashMap<>();
     public final java.util.Map<java.util.UUID, CompoundTag> rawPlayersNbt = new java.util.HashMap<>();
+    public final java.util.Map<java.util.UUID, String> rawPlayerStats = new java.util.HashMap<>();
     public WorldSnapshot worldState;
     public AdaptiveState adaptiveState;
     public CompoundTag raidsTag;
@@ -120,6 +121,13 @@ public class CheckpointData extends SavedData {
                 rawTag.put(entry.getKey().toString(), entry.getValue());
             }
             tag.put("offlinePlayers", rawTag);
+        }
+        if (!rawPlayerStats.isEmpty()) {
+            CompoundTag statsTag = new CompoundTag();
+            for (java.util.Map.Entry<java.util.UUID, String> entry : rawPlayerStats.entrySet()) {
+                statsTag.putString(entry.getKey().toString(), entry.getValue());
+            }
+            tag.put("playerStats", statsTag);
         }
         if (worldState != null) {
             net.minecraft.nbt.NbtOps.INSTANCE.withEncoder(WorldSnapshot.CODEC).apply(worldState).result().ifPresent(t -> tag.put("world", t));
@@ -267,6 +275,16 @@ public class CheckpointData extends SavedData {
                 }
             }
         }
+        if (tag.contains("playerStats", Tag.TAG_COMPOUND)) {
+            CompoundTag statsTag = tag.getCompound("playerStats");
+            for (String key : statsTag.getAllKeys()) {
+                try {
+                    UUID uuid = UUID.fromString(key);
+                    d.rawPlayerStats.put(uuid, statsTag.getString(key));
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        }
         if (tag.contains("world")) {
             WorldSnapshot.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, tag.get("world")).result().ifPresent(w -> d.worldState = w);
         }
@@ -323,6 +341,8 @@ public class CheckpointData extends SavedData {
             CompoundTag sectionsTag = tag.getCompound("sections");
             net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> blockGetter =
                     p.lookupOrThrow(net.minecraft.core.registries.Registries.BLOCK);
+            net.minecraft.core.HolderGetter<net.minecraft.world.level.biome.Biome> biomeGetter =
+                    p.lookupOrThrow(net.minecraft.core.registries.Registries.BIOME);
             for (String k : sectionsTag.getAllKeys()) {
                 long chunkKey = Long.parseLong(k);
                 CompoundTag chunkTag = sectionsTag.getCompound(k);
@@ -334,7 +354,7 @@ public class CheckpointData extends SavedData {
                     int idx;
                     try { idx = Integer.parseInt(sk); } catch (NumberFormatException ex) { continue; }
                     if (idx < 0 || idx >= len) continue;
-                    arr[idx] = SectionSnapshot.fromNBT(chunkTag.getCompound(sk), blockGetter);
+                    arr[idx] = SectionSnapshot.fromNBT(chunkTag.getCompound(sk), blockGetter, biomeGetter);
                 }
                 d.sectionSnapshots.put(chunkKey, arr);
             }

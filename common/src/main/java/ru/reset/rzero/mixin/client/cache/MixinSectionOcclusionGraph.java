@@ -17,10 +17,7 @@ public class MixinSectionOcclusionGraph {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/Util;backgroundExecutor()Ljava/util/concurrent/ExecutorService;")
     )
     private ExecutorService rzero$syncExecutor() {
-        boolean syncRequested = RZeroClientCache.get().pollSyncOcclusion();
-        if (syncRequested
-                && MeshCacheSupport.isSupported()
-                && RZeroRuntime.clientRestore().meshCacheEnabled()) {
+        if (MeshCacheSupport.isSupported() && RZeroClientCache.get().consumeSyncOcclusionRequest()) {
             return MeshCacheSupport.SAME_THREAD_EXECUTOR;
         }
         return net.minecraft.Util.backgroundExecutor();

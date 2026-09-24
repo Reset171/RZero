@@ -1,15 +1,15 @@
 package ru.reset.rzero.checkpoint.restore;
 
+import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtIo;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.storage.LevelResource;
 import ru.reset.rzero.RZero;
 import ru.reset.rzero.checkpoint.data.CheckpointData;
 import ru.reset.rzero.checkpoint.player.AdvancementSnapshot;
+import ru.reset.rzero.checkpoint.player.OfflinePlayerFiles;
 import ru.reset.rzero.checkpoint.player.PlayerData;
 import ru.reset.rzero.config.RZeroCheckpointPolicy;
 import ru.reset.rzero.runtime.RZeroRuntime;
@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public final class PlayerRestorer {
 
@@ -46,19 +47,32 @@ public final class PlayerRestorer {
     }
 
 
-    public static void restoreOfflineFiles(MinecraftServer server, CheckpointData data) {
-        File playerDir = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).toFile();
-        if (!playerDir.exists() || !playerDir.isDirectory()) {
-            return;
+    public static void restoreOfflineFiles(MinecraftServer server, CheckpointData data, RZeroCheckpointPolicy policy) {
+        File playerDir = OfflinePlayerFiles.playerDataDir(server);
+        File statsDir = OfflinePlayerFiles.playerStatsDir(server);
+
+        Map<UUID, CompoundTag> datCopy = Map.copyOf(data.rawPlayersNbt);
+        boolean restoreStats = policy.rollback().players().stats() && !data.rawPlayerStats.isEmpty();
+        Map<UUID, String> statsCopy = restoreStats ? Map.copyOf(data.rawPlayerStats) : Map.of();
+
+        if (!datCopy.isEmpty() || !statsCopy.isEmpty()) {
+            CompletableFuture.runAsync(() -> {
+                OfflinePlayerFiles.writeDatFiles(playerDir, datCopy);
+                if (!statsCopy.isEmpty()) {
+                    OfflinePlayerFiles.writeStatsFiles(statsDir, statsCopy);
+                }
+            }, Util.ioPool());
         }
 
-
-        for (Map.Entry<UUID, CompoundTag> entry : data.rawPlayersNbt.entrySet()) {
-            File f = new File(playerDir, entry.getKey() + ".dat");
+        if (restoreStats) {
             try {
-                NbtIo.writeCompressed(entry.getValue(), f.toPath());
-            } catch (Exception e) {
-                RZero.LOGGER.error("Failed to restore offline player data: " + f, e);
+                var statsMap = ((ru.reset.rzero.mixin.player.MixinPlayerList) server.getPlayerList()).rzero$getStats();
+                for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                    statsMap.remove(p.getUUID());
+                    p.getStats().markAllDirty();
+                }
+            } catch (Throwable t) {
+                RZero.LOGGER.warn("[RZero] Failed to reload in-memory player stats: {}", t.getMessage());
             }
         }
     }

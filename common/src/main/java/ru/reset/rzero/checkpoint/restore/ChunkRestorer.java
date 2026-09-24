@@ -53,6 +53,7 @@ public final class ChunkRestorer {
         boolean restoreBlockEntitiesEnabled = policy.rollback().blockEntities();
         boolean restorePoisEnabled = policy.rollback().pois();
         boolean restoreBlockEventsEnabled = policy.rollback().blockEvents();
+        boolean restoreBiomesEnabled = policy.rollback().biomes();
 
         long t0 = System.nanoTime();
         if (restoreBlockTicksEnabled || restoreFluidTicksEnabled) {
@@ -65,12 +66,13 @@ public final class ChunkRestorer {
                 isDuringLoad || !restoreBlocksEnabled ? null : new it.unimi.dsi.fastutil.longs.LongArrayList();
         int changedBlocks = 0;
         boolean needsUpdate = false;
-        if (restoreBlocksEnabled) {
+        boolean[] biomeChangedOut = new boolean[]{false};
+        if (restoreBlocksEnabled || restoreBiomesEnabled) {
             long t1 = System.nanoTime();
-            changedBlocks = applySections(level, chunk, data, chunkKey, isDuringLoad, changedPositions);
+            changedBlocks = applySections(level, chunk, data, chunkKey, isDuringLoad, changedPositions, restoreBlocksEnabled, restoreBiomesEnabled, biomeChangedOut);
             ru.reset.rzero.util.RZBenchmark.accum(ru.reset.rzero.util.RZBenchmark.Phase.CHUNK_BLOCKS, t1);
             ru.reset.rzero.util.RZBenchmark.addBlocksChanged(changedBlocks);
-            needsUpdate = changedBlocks > 0;
+            needsUpdate = changedBlocks > 0 || biomeChangedOut[0];
         }
         if (restoreBlockEntitiesEnabled) {
             long t2 = System.nanoTime();
@@ -83,6 +85,9 @@ public final class ChunkRestorer {
             chunk.setUnsaved(true);
         }
         if (!isDuringLoad) {
+            if (biomeChangedOut[0]) {
+                level.getChunkSource().chunkMap.resendBiomesForChunks(java.util.List.of(chunk));
+            }
             if (changedPositions != null && !changedPositions.isEmpty()) {
                 if (changedBlocks <= RESEND_CHUNK_THRESHOLD) {
                     long tPush = System.nanoTime();
@@ -154,7 +159,10 @@ public final class ChunkRestorer {
                                      CheckpointData data,
                                      long chunkKey,
                                      boolean isDuringLoad,
-                                     it.unimi.dsi.fastutil.longs.LongList changedPositions) {
+                                     it.unimi.dsi.fastutil.longs.LongList changedPositions,
+                                     boolean restoreBlocks,
+                                     boolean restoreBiomes,
+                                     boolean[] biomeChangedOut) {
         SectionSnapshot[] sections = data.sectionSnapshots.get(chunkKey);
         if (sections == null) {
             return 0;
@@ -171,8 +179,15 @@ public final class ChunkRestorer {
                 }
                 LevelChunkSection live = chunk.getSection(idx);
                 int yBase = SectionPos.sectionToBlockCoord(chunk.getSectionYFromSectionIndex(idx));
-                totalChanged += snap.applyDiffTo(live, chunk, level,
-                        cPos.getMinBlockX(), yBase, cPos.getMinBlockZ(), isDuringLoad, changedPositions);
+                if (restoreBlocks) {
+                    totalChanged += snap.applyDiffTo(live, chunk, level,
+                            cPos.getMinBlockX(), yBase, cPos.getMinBlockZ(), isDuringLoad, changedPositions,
+                            restoreBiomes, biomeChangedOut);
+                } else if (restoreBiomes) {
+                    snap.applyDiffTo(live, chunk, level,
+                            cPos.getMinBlockX(), yBase, cPos.getMinBlockZ(), isDuringLoad, null,
+                            true, biomeChangedOut);
+                }
             }
         } finally {
             isRestoringChunk = false;
